@@ -1178,20 +1178,22 @@ function renderLightboxShotActions(item) {
     <div class="lightbox-shot-row">
       <button type="button" class="btn btn-ghost btn-sm" id="lbStar">${item.starred ? "★ Favoriet" : "☆ Favoriet"}</button>
     </div>
-    <div class="lightbox-shot-row">
-      <label for="titleEditor">Titel</label>
-      <input class="input" id="titleEditor" value="${escapeHtml(titleVal)}" placeholder="Optionele titel" maxlength="500" />
-      <button type="button" class="btn btn-ghost btn-sm" id="lbSaveTitle">Opslaan</button>
-    </div>
-    <div class="lightbox-shot-row">
-      <label for="tagsEditor">Tags</label>
-      <input class="input" id="tagsEditor" value="${escapeHtml(tagValue)}" placeholder="werk, bug, ui" />
-      <button type="button" class="btn btn-ghost btn-sm" id="lbSaveTags">Opslaan</button>
-    </div>
-    <div class="lightbox-shot-row">
-      <label for="albumEditor">Album</label>
-      <select class="select" id="albumEditor">${renderAlbumSelectOptions(albumSel)}</select>
-      <button type="button" class="btn btn-ghost btn-sm" id="lbSaveAlbum">Opslaan</button>
+    <div class="lightbox-shot-row lightbox-shot-fields">
+      <div class="lightbox-shot-field">
+        <label for="titleEditor">Titel</label>
+        <input class="input" id="titleEditor" value="${escapeHtml(titleVal)}" placeholder="Optionele titel" maxlength="500" />
+        <button type="button" class="btn btn-ghost btn-sm" id="lbSaveTitle">Opslaan</button>
+      </div>
+      <div class="lightbox-shot-field">
+        <label for="tagsEditor">Tags</label>
+        <input class="input" id="tagsEditor" value="${escapeHtml(tagValue)}" placeholder="werk, bug, ui" />
+        <button type="button" class="btn btn-ghost btn-sm" id="lbSaveTags">Opslaan</button>
+      </div>
+      <div class="lightbox-shot-field">
+        <label for="albumEditor">Album</label>
+        <select class="select" id="albumEditor">${renderAlbumSelectOptions(albumSel)}</select>
+        <button type="button" class="btn btn-ghost btn-sm" id="lbSaveAlbum">Opslaan</button>
+      </div>
     </div>
   `;
   bindLightboxShotActions(item);
