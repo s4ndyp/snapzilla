@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Snapzilla.Client;
 
 static class ClientLog
