@@ -18,7 +18,7 @@ sealed class SettingsForm : Form
         MaximizeBox = false;
         MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
-        ClientSize = new Size(480, 320);
+        ClientSize = new Size(500, 340);
 
         var layout = new TableLayoutPanel
         {
@@ -36,10 +36,12 @@ sealed class SettingsForm : Form
 
         _urlHint = new Label
         {
-            Text = "Basis-URL van de web-UI. Draait de site op poort 80? Gebruik http://10.5.0.153 (niet :3000).",
+            Text =
+                "IP of hostnaam van de Snapzilla-server op je netwerk. Poort 80: http://10.5.0.153 — " +
+                "niet :3000 tenzij docker zo is ingesteld. Client en server op verschillende PCs: firewall open.",
             AutoSize = true,
             ForeColor = SystemColors.GrayText,
-            MaximumSize = new Size(340, 0),
+            MaximumSize = new Size(360, 0),
         };
         layout.SetColumnSpan(_urlHint, 2);
         layout.Controls.Add(_urlHint, 0, 1);
@@ -73,7 +75,7 @@ sealed class SettingsForm : Form
         var logBtn = new Button { Text = "Logboek openen", AutoSize = true };
         logBtn.Click += (_, _) => ClientLog.OpenInEditor();
 
-        var testBtn = new Button { Text = "Test verbinding", AutoSize = true };
+        var testBtn = new Button { Text = "Test / zoek server", AutoSize = true };
         testBtn.Click += async (_, _) => await TestConnectionAsync(testBtn);
 
         btnRow.Controls.Add(logBtn);
@@ -95,15 +97,35 @@ sealed class SettingsForm : Form
         try
         {
             var upload = _upload ?? new UploadService(_config);
-            var ok = await upload.TestConnectionAsync();
-            MessageBox.Show(
-                this,
-                ok
-                    ? "Server bereikbaar (/api/health OK)."
-                    : "Geen antwoord of fout — zie logboek voor details.",
-                ok ? "Verbinding OK" : "Verbinding mislukt",
-                MessageBoxButtons.OK,
-                ok ? MessageBoxIcon.Information : MessageBoxIcon.Warning);
+            var result = await upload.TestConnectionAsync();
+            if (result.Success)
+            {
+                if (result.WorkingBaseUrl is not null
+                    && !result.WorkingBaseUrl.Equals(_config.ServerUrl, StringComparison.OrdinalIgnoreCase))
+                {
+                    var apply = MessageBox.Show(
+                        this,
+                        $"{result.Message}{Environment.NewLine}{Environment.NewLine}Server-URL bijwerken naar:{Environment.NewLine}{result.WorkingBaseUrl}?",
+                        "Server gevonden",
+                        MessageBoxButtons.YesNo,
+                        MessageBoxIcon.Question);
+                    if (apply == DialogResult.Yes)
+                    {
+                        _urlBox.Text = result.WorkingBaseUrl;
+                        _config.ServerUrl = result.WorkingBaseUrl;
+                        _config.Save();
+                    }
+                }
+                else
+                {
+                    MessageBox.Show(this, result.Message, "Verbinding OK", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                }
+            }
+            else
+            {
+                ClientLog.Error($"Verbindingstest mislukt: {result.Message}");
+                MessageBox.Show(this, result.Message, "Verbinding mislukt", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            }
         }
         catch (Exception ex)
         {
@@ -126,7 +148,16 @@ sealed class SettingsForm : Form
 
     void SaveFieldsToConfig()
     {
-        _config.ServerUrl = _urlBox.Text.Trim();
+        try
+        {
+            _config.ServerUrl = ServerConnection.Normalize(_urlBox.Text.Trim());
+            _urlBox.Text = _config.ServerUrl;
+        }
+        catch (FormatException ex)
+        {
+            MessageBox.Show(this, ex.Message, "Ongeldige URL", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+
         _config.ClientName = _nameBox.Text.Trim();
         _config.StartWithWindows = _startupBox.Checked;
     }

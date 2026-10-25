@@ -47,8 +47,15 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-- Web-UI: `http://<host>:3000`
-- PocketBase admin (eerste setup): `http://<host>:3000/_/`
+- Web-UI: `http://<host>:3000` (of poort uit `.env`, bv. `80` → `http://<host>/`)
+- PocketBase admin (eerste setup): `http://<host>:3000/_/` (zelfde poort als de UI)
+
+### Client op een andere PC (LAN)
+
+1. Op de server: in `.env` de poort zetten die extern bereikbaar is (`SNAPZILLA_PORT=80` als de site op 80 draait).
+2. Firewall/LXC: die poort open voor je LAN.
+3. Test vanaf de client-PC in de browser: `http://<server-ip>/api/health`.
+4. In de Windows-client: **zelfde basis-URL** (geen `:3000` als de site op 80 staat). Gebruik **Test / zoek server** — de client probeert ook poort 80 en 3000.
 
 Collecties worden automatisch aangemaakt via `pocketbase/pb_migrations/`.
 

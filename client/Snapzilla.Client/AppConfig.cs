@@ -25,6 +25,7 @@ sealed class AppConfig
                 var json = File.ReadAllText(ConfigPath);
                 var cfg = JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
                 cfg.EnsureClientId();
+                cfg.NormalizeServerUrl();
                 return cfg;
             }
         }
@@ -35,6 +36,7 @@ sealed class AppConfig
 
         var fresh = new AppConfig();
         fresh.EnsureClientId();
+        fresh.NormalizeServerUrl();
         return fresh;
     }
 
@@ -42,6 +44,7 @@ sealed class AppConfig
     {
         Directory.CreateDirectory(ConfigDir);
         EnsureClientId();
+        NormalizeServerUrl();
         var json = JsonSerializer.Serialize(this, new JsonSerializerOptions { WriteIndented = true });
         File.WriteAllText(ConfigPath, json);
     }
@@ -50,5 +53,17 @@ sealed class AppConfig
     {
         if (string.IsNullOrWhiteSpace(ClientId))
             ClientId = Guid.NewGuid().ToString("N");
+    }
+
+    void NormalizeServerUrl()
+    {
+        try
+        {
+            ServerUrl = ServerConnection.Normalize(ServerUrl);
+        }
+        catch
+        {
+            /* behoud raw waarde; gebruiker corrigeert in instellingen */
+        }
     }
 }
