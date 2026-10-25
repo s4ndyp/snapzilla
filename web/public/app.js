@@ -349,6 +349,9 @@ function renderGallery() {
     card.className = `shot-card${state.selected.has(item.id) ? " selected" : ""}`;
     card.dataset.id = item.id;
 
+    const top = document.createElement("div");
+    top.className = "shot-card-top";
+
     const check = document.createElement("input");
     check.type = "checkbox";
     check.className = "shot-check";
@@ -360,27 +363,32 @@ function renderGallery() {
       updateBulkUi();
       card.classList.toggle("selected", check.checked);
     });
+    top.appendChild(check);
+
+    const thumb = document.createElement("div");
+    thumb.className = "shot-thumb";
 
     const img = document.createElement("img");
     img.loading = "lazy";
     img.alt = item.title || "Screenshot";
     img.src = thumbUrl(item);
-
-    const overlay = document.createElement("div");
-    overlay.className = "shot-overlay";
-    overlay.innerHTML = `<span>${formatDate(item.captured_at || item.created)}</span>`;
-    if (item.starred) overlay.innerHTML += '<span class="shot-star">★</span>';
-
-    card.appendChild(check);
-    card.appendChild(img);
-    card.appendChild(overlay);
+    thumb.appendChild(img);
 
     if (isDuplicate(item.id)) {
       const dup = document.createElement("span");
       dup.className = "shot-dup";
       dup.textContent = "dup";
-      card.appendChild(dup);
+      thumb.appendChild(dup);
     }
+
+    const meta = document.createElement("div");
+    meta.className = "shot-meta";
+    meta.innerHTML = `<span class="shot-date">${formatDate(item.captured_at || item.created)}</span>`;
+    if (item.starred) meta.innerHTML += '<span class="shot-star" title="Favoriet">★</span>';
+
+    card.appendChild(top);
+    card.appendChild(thumb);
+    card.appendChild(meta);
 
     card.addEventListener("click", (e) => {
       if (e.target === check) return;
