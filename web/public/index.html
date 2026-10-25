@@ -61,18 +61,24 @@
           </div>
         </section>
 
-        <section class="sidebar-block">
-          <h2>Tags</h2>
+        <section class="sidebar-block sidebar-block-tags">
+          <div class="sidebar-block-title">
+            <h2>Tags</h2>
+            <span class="filter-context-badge" id="tagFilterBadge">Alle tags</span>
+          </div>
           <ul class="tag-list" id="tagList"></ul>
           <p class="hint empty-tags" id="tagsEmpty">Nog geen tags</p>
         </section>
 
-        <section class="sidebar-block">
+        <section class="sidebar-block sidebar-block-albums">
           <div class="sidebar-head">
             <h2>Albums</h2>
             <button type="button" class="btn btn-ghost btn-sm" id="newAlbumBtn">+</button>
           </div>
           <ul class="album-list" id="albumList"></ul>
+          <span class="filter-context-badge filter-context-badge-album" id="albumFilterBadge">
+            <span class="badge-icon" aria-hidden="true">📁</span> Alle albums
+          </span>
         </section>
 
         <section class="sidebar-block">
@@ -140,18 +146,29 @@
         <button type="button" class="lightbox-close" id="lightboxClose" aria-label="Sluiten">×</button>
         <button type="button" class="lightbox-nav prev" id="lightboxPrev" aria-label="Vorige">‹</button>
         <figure class="lightbox-figure">
+          <div class="lightbox-edit-tools" id="lightboxEditTools">
+            <button type="button" class="edit-tool-btn edit-tool-btn-active" data-edtool="pen">Pen</button>
+            <button type="button" class="edit-tool-btn" data-edtool="highlight">Marker</button>
+            <button type="button" class="edit-tool-btn" data-edtool="rect">Rechthoek</button>
+            <button type="button" class="edit-tool-btn" data-edtool="arrow">Pijl</button>
+            <span class="edit-tools-divider" aria-hidden="true"></span>
+            <div class="edit-color-picker" id="editColorPicker" aria-label="Kleur">
+              <button type="button" class="color-chip color-chip-active" data-color="#6b9fff" style="--chip:#6b9fff" title="Blauw"></button>
+              <button type="button" class="color-chip" data-color="#ec4899" style="--chip:#ec4899" title="Roze"></button>
+              <button type="button" class="color-chip" data-color="#ef4444" style="--chip:#ef4444" title="Rood"></button>
+              <button type="button" class="color-chip" data-color="#22c55e" style="--chip:#22c55e" title="Groen"></button>
+              <button type="button" class="color-chip" data-color="#fbbf24" style="--chip:#fbbf24" title="Geel"></button>
+              <button type="button" class="color-chip" data-color="#ffffff" style="--chip:#ffffff" title="Wit"></button>
+            </div>
+            <span class="edit-tools-divider" aria-hidden="true"></span>
+            <button type="button" class="btn btn-ghost btn-sm" id="lbSaveEdit">Opslaan</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="lbResetEdit">Herstel</button>
+          </div>
           <div class="lightbox-view" id="lightboxView">
             <img id="lightboxImg" alt="" />
             <canvas id="lightboxCanvas" hidden></canvas>
           </div>
-          <div class="lightbox-edit-tools" id="lightboxEditTools" hidden>
-            <button type="button" class="btn btn-ghost btn-sm" data-edtool="pen">Pen</button>
-            <button type="button" class="btn btn-ghost btn-sm" data-edtool="highlight">Marker</button>
-            <button type="button" class="btn btn-ghost btn-sm" data-edtool="rect">Rechthoek</button>
-            <button type="button" class="btn btn-ghost btn-sm" data-edtool="arrow">Pijl</button>
-            <button type="button" class="btn btn-primary btn-sm" id="lbSaveEdit">Opslaan</button>
-            <button type="button" class="btn btn-ghost btn-sm" id="lbCancelEdit">Annuleren</button>
-          </div>
+          <div class="lightbox-shot-actions" id="lightboxShotActions"></div>
           <figcaption id="lightboxCaption"></figcaption>
         </figure>
         <button type="button" class="lightbox-nav next" id="lightboxNext" aria-label="Volgende">›</button>
