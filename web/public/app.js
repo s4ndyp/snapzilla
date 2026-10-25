@@ -275,7 +275,9 @@ function renderSidebarLists() {
     const li = document.createElement("li");
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = `filter-btn${state.tag === tag ? " filter-btn-active" : ""}`;
+    const tagActive = state.tag === tag;
+    btn.className = `filter-btn${tagActive ? " filter-btn-active" : ""}`;
+    if (tagActive) btn.setAttribute("aria-current", "true");
     btn.textContent = `#${tag} (${count})`;
     btn.addEventListener("click", () => {
       state.tag = state.tag === tag ? null : tag;
@@ -306,7 +308,9 @@ function renderSidebarLists() {
   const allBtn = document.createElement("li");
   const all = document.createElement("button");
   all.type = "button";
-  all.className = `filter-btn${!state.albumId ? " filter-btn-active" : ""}`;
+  const allAlbumsActive = !state.albumId;
+  all.className = `filter-btn${allAlbumsActive ? " filter-btn-active" : ""}`;
+  if (allAlbumsActive) all.setAttribute("aria-current", "true");
   all.textContent = "Alle albums";
   all.addEventListener("click", () => {
     state.albumId = null;
@@ -318,7 +322,9 @@ function renderSidebarLists() {
     const li = document.createElement("li");
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = `filter-btn${state.albumId === alb.id ? " filter-btn-active" : ""}`;
+    const albumActive = state.albumId === alb.id;
+    btn.className = `filter-btn${albumActive ? " filter-btn-active" : ""}`;
+    if (albumActive) btn.setAttribute("aria-current", "true");
     btn.textContent = alb.name;
     btn.addEventListener("click", () => {
       state.albumId = state.albumId === alb.id ? null : alb.id;
