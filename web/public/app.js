@@ -16,6 +16,11 @@ const state = {
   selected: new Set(),
   lightboxIndex: -1,
   phashGroups: new Map(),
+  lightboxEditing: false,
+  editTool: "pen",
+  editDrawing: false,
+  editStart: null,
+  editSnapshot: null,
 };
 
 const $ = (id) => document.getElementById(id);
@@ -50,6 +55,18 @@ function formatDate(iso) {
     dateStyle: "medium",
     timeStyle: "short",
   });
+}
+
+function escapeHtml(s) {
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/"/g, "&quot;");
+}
+
+function albumIdOf(item) {
+  if (!item?.album) return "";
+  return typeof item.album === "string" ? item.album : item.album.id || "";
 }
 
 function parseTags(raw) {
@@ -120,6 +137,36 @@ async function patchRecord(id, data) {
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
+}
+
+async function patchRecordImage(id, blob, extra = {}) {
+  const body = new FormData();
+  body.append("image", blob, "edited.png");
+  body.append("analyzed", "false");
+  for (const [k, v] of Object.entries(extra)) {
+    body.append(k, typeof v === "object" ? JSON.stringify(v) : String(v));
+  }
+  const res = await fetch(`${API}/collections/${COLLECTION}/records/${id}`, {
+    method: "PATCH",
+    body,
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+function renderAlbumSelectOptions(selectedId = "") {
+  let html = `<option value="">— Geen album —</option>`;
+  for (const a of state.albums) {
+    const sel = a.id === selectedId ? " selected" : "";
+    html += `<option value="${a.id}"${sel}>${escapeHtml(a.name)}</option>`;
+  }
+  return html;
+}
+
+function populateBulkAlbumSelect() {
+  const sel = $("bulkAlbumSelect");
+  if (!sel) return;
+  sel.innerHTML = renderAlbumSelectOptions("");
 }
 
 async function deleteRecord(id) {
@@ -354,12 +401,152 @@ function updateBulkUi() {
   $("bulkStarBtn").disabled = dis;
   $("bulkTagBtn").disabled = dis;
   $("bulkDeleteBtn").disabled = dis;
+  $("bulkAlbumBtn").disabled = dis;
+  $("bulkAlbumSelect").disabled = dis;
+}
+
+function stopLightboxEdit() {
+  state.lightboxEditing = false;
+  state.editDrawing = false;
+  $("lightboxEditTools").hidden = true;
+  $("lightboxCanvas").hidden = true;
+  $("lightboxImg").hidden = false;
+}
+
+async function startLightboxEdit(item) {
+  const img = $("lightboxImg");
+  const canvas = $("lightboxCanvas");
+  await new Promise((resolve, reject) => {
+    if (img.complete) resolve();
+    else {
+      img.onload = () => resolve();
+      img.onerror = () => reject(new Error("Afbeelding laden mislukt"));
+    }
+  });
+
+  canvas.width = img.naturalWidth;
+  canvas.height = img.naturalHeight;
+  const ctx = canvas.getContext("2d");
+  ctx.drawImage(img, 0, 0);
+  state.editSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+  state.lightboxEditing = true;
+  img.hidden = true;
+  canvas.hidden = false;
+  $("lightboxEditTools").hidden = false;
+}
+
+function canvasPoint(canvas, evt) {
+  const r = canvas.getBoundingClientRect();
+  const scaleX = canvas.width / r.width;
+  const scaleY = canvas.height / r.height;
+  return {
+    x: (evt.clientX - r.left) * scaleX,
+    y: (evt.clientY - r.top) * scaleY,
+  };
+}
+
+function bindLightboxCanvas(item) {
+  const canvas = $("lightboxCanvas");
+  const ctx = canvas.getContext("2d");
+
+  const drawShape = (from, to) => {
+    if (!state.editSnapshot) return;
+    ctx.putImageData(state.editSnapshot, 0, 0);
+    ctx.lineWidth = state.editTool === "highlight" ? 14 : 3;
+    ctx.lineCap = "round";
+    if (state.editTool === "highlight") {
+      ctx.strokeStyle = "rgba(255, 235, 59, 0.55)";
+    } else {
+      ctx.strokeStyle = "#6b9fff";
+    }
+    if (state.editTool === "rect") {
+      ctx.strokeRect(from.x, from.y, to.x - from.x, to.y - from.y);
+      return;
+    }
+    if (state.editTool === "arrow") {
+      ctx.beginPath();
+      ctx.moveTo(from.x, from.y);
+      ctx.lineTo(to.x, to.y);
+      ctx.stroke();
+      const angle = Math.atan2(to.y - from.y, to.x - from.x);
+      const head = 14;
+      ctx.beginPath();
+      ctx.moveTo(to.x, to.y);
+      ctx.lineTo(to.x - head * Math.cos(angle - Math.PI / 6), to.y - head * Math.sin(angle - Math.PI / 6));
+      ctx.moveTo(to.x, to.y);
+      ctx.lineTo(to.x - head * Math.cos(angle + Math.PI / 6), to.y - head * Math.sin(angle + Math.PI / 6));
+      ctx.stroke();
+      return;
+    }
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.stroke();
+  };
+
+  canvas.onmousedown = (e) => {
+    if (!state.lightboxEditing) return;
+    state.editDrawing = true;
+    state.editStart = canvasPoint(canvas, e);
+    if (state.editTool === "pen" || state.editTool === "highlight") {
+      state.editSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    }
+  };
+
+  canvas.onmousemove = (e) => {
+    if (!state.lightboxEditing || !state.editDrawing || !state.editStart) return;
+    const pt = canvasPoint(canvas, e);
+    if (state.editTool === "pen" || state.editTool === "highlight") {
+      drawShape(state.editStart, pt);
+      state.editStart = pt;
+      state.editSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    } else {
+      drawShape(state.editStart, pt);
+    }
+  };
+
+  canvas.onmouseup = (e) => {
+    if (!state.lightboxEditing || !state.editDrawing) return;
+    const pt = canvasPoint(canvas, e);
+    if (state.editTool !== "pen" && state.editTool !== "highlight") {
+      drawShape(state.editStart, pt);
+      state.editSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    }
+    state.editDrawing = false;
+  };
+
+  $("lbSaveEdit").onclick = async () => {
+    const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
+    if (!blob) return;
+    try {
+      await patchRecordImage(item.id, blob);
+      stopLightboxEdit();
+      showToast("Bewerking opgeslagen");
+      await reload();
+      state.lightboxIndex = state.items.findIndex((x) => x.id === item.id);
+      refreshLightbox();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  };
+
+  $("lbCancelEdit").onclick = () => stopLightboxEdit();
+
+  document.querySelectorAll("[data-edtool]").forEach((btn) => {
+    btn.onclick = () => {
+      state.editTool = btn.dataset.edtool;
+      document.querySelectorAll("[data-edtool]").forEach((b) => b.classList.remove("chip-active"));
+      btn.classList.add("chip-active");
+    };
+  });
 }
 
 function openLightbox(id) {
   const idx = state.items.findIndex((x) => x.id === id);
   if (idx < 0) return;
   state.lightboxIndex = idx;
+  stopLightboxEdit();
   refreshLightbox();
   $("lightbox").showModal();
 }
@@ -367,7 +554,8 @@ function openLightbox(id) {
 function refreshLightbox() {
   const item = state.items[state.lightboxIndex];
   if (!item) return;
-  $("lightboxImg").src = fileUrl(item);
+  $("lightboxImg").src = `${fileUrl(item)}?t=${Date.now()}`;
+  $("lightboxImg").hidden = false;
   $("lightboxCaption").textContent = item.title || "Screenshot";
 
   const colors = Array.isArray(item.colors) ? item.colors : [];
@@ -378,40 +566,88 @@ function refreshLightbox() {
     )
     .join("");
 
-  const tags = parseTags(item.tags).join(", ") || "—";
+  const tagValue = parseTags(item.tags).join(", ");
+  const albumSel = albumIdOf(item);
 
   $("lightboxMeta").innerHTML = `
     <dl>
       <dt>Datum</dt><dd>${formatDate(item.captured_at || item.created)}</dd>
       <dt>Afmeting</dt><dd>${item.width || "?"} × ${item.height || "?"} · ${formatBytes(item.file_size)}</dd>
-      <dt>Client</dt><dd>${item.client_name || item.hostname || item.client_id || "—"}</dd>
-      <dt>Modus</dt><dd>${item.capture_mode || "—"}</dd>
-      <dt>Tags</dt><dd>${tags}</dd>
+      <dt>Client</dt><dd>${escapeHtml(item.client_name || item.hostname || item.client_id || "—")}</dd>
+      <dt>Modus</dt><dd>${escapeHtml(item.capture_mode || "—")}</dd>
+      <dt>Tags</dt>
+      <dd>
+        <input class="input" id="tagsEditor" value="${escapeHtml(tagValue)}" placeholder="werk, bug, ui" />
+        <div class="lightbox-meta-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="lbSaveTags">Tags opslaan</button>
+        </div>
+      </dd>
+      <dt>Album</dt>
+      <dd>
+        <select class="select" id="albumEditor">${renderAlbumSelectOptions(albumSel)}</select>
+        <div class="lightbox-meta-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="lbSaveAlbum">Album opslaan</button>
+        </div>
+      </dd>
       <dt>Kleuren</dt><dd>${colorHtml || "—"}</dd>
-      <dt>pHash</dt><dd>${item.phash || "—"}</dd>
-      <dt>OCR</dt><dd>${item.ocr_text ? item.ocr_text.slice(0, 500) : "—"}</dd>
+      <dt>pHash</dt><dd>${escapeHtml(item.phash || "—")}</dd>
+      <dt>OCR</dt><dd>${escapeHtml(item.ocr_text ? item.ocr_text.slice(0, 500) : "—")}</dd>
       <dt>Notities</dt>
-      <dd><textarea id="notesEditor">${item.notes || ""}</textarea></dd>
+      <dd><textarea id="notesEditor">${escapeHtml(item.notes || "")}</textarea></dd>
     </dl>
-    <div style="margin-top:1rem;display:flex;gap:0.5rem;flex-wrap:wrap">
+    <div class="lightbox-meta-actions" style="margin-top:1rem">
+      <button type="button" class="btn btn-ghost btn-sm" id="lbEdit">Bewerken</button>
       <button type="button" class="btn btn-ghost btn-sm" id="lbStar">${item.starred ? "Unstar" : "⭐ Star"}</button>
       <a class="btn btn-ghost btn-sm" href="${fileUrl(item)}" download>Download</a>
       <button type="button" class="btn btn-danger btn-sm" id="lbDelete">Verwijder</button>
     </div>
   `;
 
-  $("notesEditor")?.addEventListener(
-    "blur",
-    async (e) => {
-      try {
-        await patchRecord(item.id, { notes: e.target.value });
-        item.notes = e.target.value;
-      } catch (err) {
-        showToast(err.message, true);
-      }
-    },
-    { once: true },
-  );
+  bindLightboxCanvas(item);
+
+  $("notesEditor")?.addEventListener("blur", async (e) => {
+    try {
+      await patchRecord(item.id, { notes: e.target.value });
+      item.notes = e.target.value;
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+
+  $("lbSaveTags")?.addEventListener("click", async () => {
+    const tags = $("tagsEditor").value
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+    try {
+      await patchRecord(item.id, { tags });
+      item.tags = tags;
+      showToast("Tags opgeslagen");
+      renderSidebarLists();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+
+  $("lbSaveAlbum")?.addEventListener("click", async () => {
+    const album = $("albumEditor").value;
+    try {
+      await patchRecord(item.id, { album: album || "" });
+      item.album = album || null;
+      showToast("Album bijgewerkt");
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+
+  $("lbEdit")?.addEventListener("click", async () => {
+    try {
+      await startLightboxEdit(item);
+      document.querySelector('[data-edtool="pen"]')?.classList.add("chip-active");
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
 
   $("lbStar")?.addEventListener("click", async () => {
     try {
@@ -491,6 +727,7 @@ async function init() {
   try {
     const alb = await listAlbums();
     state.albums = alb.items || [];
+    populateBulkAlbumSelect();
   } catch {
     state.albums = [];
   }
@@ -561,6 +798,15 @@ async function init() {
     await reload();
   });
 
+  $("bulkAlbumBtn").addEventListener("click", async () => {
+    const album = $("bulkAlbumSelect").value;
+    for (const id of state.selected) {
+      await patchRecord(id, { album: album || "" });
+    }
+    showToast(album ? "Naar album verplaatst" : "Uit album gehaald");
+    await reload();
+  });
+
   const dropzone = $("dropzone");
   dropzone.addEventListener("dragover", (e) => {
     e.preventDefault();
@@ -622,6 +868,7 @@ async function init() {
       $("albumNameInput").value = "";
       const alb = await listAlbums();
       state.albums = alb.items || [];
+      populateBulkAlbumSelect();
       renderSidebarLists();
       showToast("Album aangemaakt");
     } catch (err) {
