@@ -18,6 +18,7 @@ const state = {
   phashGroups: new Map(),
   lightboxEditing: false,
   editTool: "pen",
+  editColor: "#6b9fff",
   editDrawing: false,
   editStart: null,
   editSnapshot: null,
@@ -266,6 +267,23 @@ function renderTimeline(items) {
   }
 }
 
+function updateFilterBadges() {
+  const tagBadge = $("tagFilterBadge");
+  if (tagBadge) {
+    tagBadge.textContent = state.tag ? `#${state.tag}` : "Alle tags";
+    tagBadge.classList.toggle("filter-context-badge-active", Boolean(state.tag));
+  }
+
+  const albumBadge = $("albumFilterBadge");
+  if (albumBadge) {
+    const name = state.albumId
+      ? state.albums.find((a) => a.id === state.albumId)?.name || "Album"
+      : "Alle albums";
+    albumBadge.innerHTML = `<span class="badge-icon" aria-hidden="true">📁</span> ${escapeHtml(name)}`;
+    albumBadge.classList.toggle("filter-context-badge-active", Boolean(state.albumId));
+  }
+}
+
 function renderSidebarLists() {
   const tags = aggregateTags(state.items);
   const tagList = $("tagList");
@@ -333,6 +351,8 @@ function renderSidebarLists() {
     li.appendChild(btn);
     albumList.appendChild(li);
   }
+
+  updateFilterBadges();
 }
 
 function renderStats() {
@@ -422,9 +442,15 @@ function updateBulkUi() {
 function stopLightboxEdit() {
   state.lightboxEditing = false;
   state.editDrawing = false;
-  $("lightboxEditTools").hidden = true;
   $("lightboxCanvas").hidden = true;
   $("lightboxImg").hidden = false;
+}
+
+function setActiveEditTool(tool) {
+  state.editTool = tool;
+  document.querySelectorAll("[data-edtool]").forEach((btn) => {
+    btn.classList.toggle("edit-tool-btn-active", btn.dataset.edtool === tool);
+  });
 }
 
 async function startLightboxEdit(item) {
@@ -447,7 +473,6 @@ async function startLightboxEdit(item) {
   state.lightboxEditing = true;
   img.hidden = true;
   canvas.hidden = false;
-  $("lightboxEditTools").hidden = false;
 }
 
 function canvasPoint(canvas, evt) {
@@ -472,7 +497,7 @@ function bindLightboxCanvas(item) {
     if (state.editTool === "highlight") {
       ctx.strokeStyle = "rgba(255, 235, 59, 0.55)";
     } else {
-      ctx.strokeStyle = "#6b9fff";
+      ctx.strokeStyle = state.editColor;
     }
     if (state.editTool === "rect") {
       ctx.strokeRect(from.x, from.y, to.x - from.x, to.y - from.y);
@@ -545,89 +570,21 @@ function bindLightboxCanvas(item) {
     }
   };
 
-  $("lbCancelEdit").onclick = () => stopLightboxEdit();
-
-  document.querySelectorAll("[data-edtool]").forEach((btn) => {
-    btn.onclick = () => {
-      state.editTool = btn.dataset.edtool;
-      document.querySelectorAll("[data-edtool]").forEach((b) => b.classList.remove("chip-active"));
-      btn.classList.add("chip-active");
-    };
-  });
-}
-
-function openLightbox(id) {
-  const idx = state.items.findIndex((x) => x.id === id);
-  if (idx < 0) return;
-  state.lightboxIndex = idx;
-  stopLightboxEdit();
-  refreshLightbox();
-  $("lightbox").showModal();
-}
-
-function refreshLightbox() {
-  const item = state.items[state.lightboxIndex];
-  if (!item) return;
-  $("lightboxImg").src = `${fileUrl(item)}?t=${Date.now()}`;
-  $("lightboxImg").hidden = false;
-  $("lightboxCaption").textContent = item.title || "Screenshot";
-
-  const colors = Array.isArray(item.colors) ? item.colors : [];
-  const colorHtml = colors
-    .map(
-      (c) =>
-        `<span class="color-swatch" style="background:rgb(${c.r},${c.g},${c.b})"></span>`,
-    )
-    .join("");
-
-  const tagValue = parseTags(item.tags).join(", ");
-  const albumSel = albumIdOf(item);
-
-  $("lightboxMeta").innerHTML = `
-    <dl>
-      <dt>Datum</dt><dd>${formatDate(item.captured_at || item.created)}</dd>
-      <dt>Afmeting</dt><dd>${item.width || "?"} × ${item.height || "?"} · ${formatBytes(item.file_size)}</dd>
-      <dt>Client</dt><dd>${escapeHtml(item.client_name || item.hostname || item.client_id || "—")}</dd>
-      <dt>Modus</dt><dd>${escapeHtml(item.capture_mode || "—")}</dd>
-      <dt>Tags</dt>
-      <dd>
-        <input class="input" id="tagsEditor" value="${escapeHtml(tagValue)}" placeholder="werk, bug, ui" />
-        <div class="lightbox-meta-actions">
-          <button type="button" class="btn btn-ghost btn-sm" id="lbSaveTags">Tags opslaan</button>
-        </div>
-      </dd>
-      <dt>Album</dt>
-      <dd>
-        <select class="select" id="albumEditor">${renderAlbumSelectOptions(albumSel)}</select>
-        <div class="lightbox-meta-actions">
-          <button type="button" class="btn btn-ghost btn-sm" id="lbSaveAlbum">Album opslaan</button>
-        </div>
-      </dd>
-      <dt>Kleuren</dt><dd>${colorHtml || "—"}</dd>
-      <dt>pHash</dt><dd>${escapeHtml(item.phash || "—")}</dd>
-      <dt>OCR</dt><dd>${escapeHtml(item.ocr_text ? item.ocr_text.slice(0, 500) : "—")}</dd>
-      <dt>Notities</dt>
-      <dd><textarea id="notesEditor">${escapeHtml(item.notes || "")}</textarea></dd>
-    </dl>
-    <div class="lightbox-meta-actions" style="margin-top:1rem">
-      <button type="button" class="btn btn-ghost btn-sm" id="lbEdit">Bewerken</button>
-      <button type="button" class="btn btn-ghost btn-sm" id="lbStar">${item.starred ? "Unstar" : "⭐ Star"}</button>
-      <a class="btn btn-ghost btn-sm" href="${fileUrl(item)}" download>Download</a>
-      <button type="button" class="btn btn-danger btn-sm" id="lbDelete">Verwijder</button>
-    </div>
-  `;
-
-  bindLightboxCanvas(item);
-
-  $("notesEditor")?.addEventListener("blur", async (e) => {
+  $("lbResetEdit").onclick = async () => {
     try {
-      await patchRecord(item.id, { notes: e.target.value });
-      item.notes = e.target.value;
+      await startLightboxEdit(item);
+      setActiveEditTool(state.editTool);
     } catch (err) {
       showToast(err.message, true);
     }
-  });
+  };
 
+  document.querySelectorAll("[data-edtool]").forEach((btn) => {
+    btn.onclick = () => setActiveEditTool(btn.dataset.edtool);
+  });
+}
+
+function bindLightboxShotActions(item) {
   $("lbSaveTags")?.addEventListener("click", async () => {
     const tags = $("tagsEditor").value
       .split(",")
@@ -654,15 +611,6 @@ function refreshLightbox() {
     }
   });
 
-  $("lbEdit")?.addEventListener("click", async () => {
-    try {
-      await startLightboxEdit(item);
-      document.querySelector('[data-edtool="pen"]')?.classList.add("chip-active");
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  });
-
   $("lbStar")?.addEventListener("click", async () => {
     try {
       const next = !item.starred;
@@ -670,6 +618,83 @@ function refreshLightbox() {
       item.starred = next;
       refreshLightbox();
       renderGallery();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+}
+
+function renderLightboxShotActions(item) {
+  const tagValue = parseTags(item.tags).join(", ");
+  const albumSel = albumIdOf(item);
+  $("lightboxShotActions").innerHTML = `
+    <div class="lightbox-shot-row">
+      <button type="button" class="btn btn-ghost btn-sm" id="lbStar">${item.starred ? "★ Favoriet" : "☆ Favoriet"}</button>
+    </div>
+    <div class="lightbox-shot-row">
+      <label for="tagsEditor">Tags</label>
+      <input class="input" id="tagsEditor" value="${escapeHtml(tagValue)}" placeholder="werk, bug, ui" />
+      <button type="button" class="btn btn-ghost btn-sm" id="lbSaveTags">Opslaan</button>
+    </div>
+    <div class="lightbox-shot-row">
+      <label for="albumEditor">Album</label>
+      <select class="select" id="albumEditor">${renderAlbumSelectOptions(albumSel)}</select>
+      <button type="button" class="btn btn-ghost btn-sm" id="lbSaveAlbum">Opslaan</button>
+    </div>
+  `;
+  bindLightboxShotActions(item);
+}
+
+function openLightbox(id) {
+  const idx = state.items.findIndex((x) => x.id === id);
+  if (idx < 0) return;
+  state.lightboxIndex = idx;
+  refreshLightbox();
+  $("lightbox").showModal();
+}
+
+function refreshLightbox() {
+  const item = state.items[state.lightboxIndex];
+  if (!item) return;
+  $("lightboxImg").src = `${fileUrl(item)}?t=${Date.now()}`;
+  $("lightboxImg").hidden = false;
+  $("lightboxCaption").textContent = item.title || "Screenshot";
+
+  const colors = Array.isArray(item.colors) ? item.colors : [];
+  const colorHtml = colors
+    .map(
+      (c) =>
+        `<span class="color-swatch" style="background:rgb(${c.r},${c.g},${c.b})"></span>`,
+    )
+    .join("");
+
+  $("lightboxMeta").innerHTML = `
+    <dl>
+      <dt>Datum</dt><dd>${formatDate(item.captured_at || item.created)}</dd>
+      <dt>Afmeting</dt><dd>${item.width || "?"} × ${item.height || "?"} · ${formatBytes(item.file_size)}</dd>
+      <dt>Client</dt><dd>${escapeHtml(item.client_name || item.hostname || item.client_id || "—")}</dd>
+      <dt>Modus</dt><dd>${escapeHtml(item.capture_mode || "—")}</dd>
+      <dt>Kleuren</dt><dd>${colorHtml || "—"}</dd>
+      <dt>pHash</dt><dd>${escapeHtml(item.phash || "—")}</dd>
+      <dt>OCR</dt><dd>${escapeHtml(item.ocr_text ? item.ocr_text.slice(0, 500) : "—")}</dd>
+      <dt>Notities</dt>
+      <dd><textarea id="notesEditor">${escapeHtml(item.notes || "")}</textarea></dd>
+    </dl>
+    <div class="lightbox-meta-actions" style="margin-top:1rem">
+      <a class="btn btn-ghost btn-sm" href="${fileUrl(item)}" download>Download</a>
+      <button type="button" class="btn btn-danger btn-sm" id="lbDelete">Verwijder</button>
+    </div>
+  `;
+
+  renderLightboxShotActions(item);
+  bindLightboxCanvas(item);
+  setActiveEditTool(state.editTool);
+  void startLightboxEdit(item).catch((err) => showToast(err.message, true));
+
+  $("notesEditor")?.addEventListener("blur", async (e) => {
+    try {
+      await patchRecord(item.id, { notes: e.target.value });
+      item.notes = e.target.value;
     } catch (err) {
       showToast(err.message, true);
     }
@@ -856,7 +881,19 @@ async function init() {
     }
   });
 
-  $("lightboxClose").addEventListener("click", () => $("lightbox").close());
+  $("lightboxClose").addEventListener("click", () => {
+    stopLightboxEdit();
+    $("lightbox").close();
+  });
+
+  $("editColorPicker")?.addEventListener("click", (e) => {
+    const chip = e.target.closest("[data-color]");
+    if (!chip) return;
+    state.editColor = chip.dataset.color;
+    document.querySelectorAll(".color-chip").forEach((c) => {
+      c.classList.toggle("color-chip-active", c === chip);
+    });
+  });
   $("lightboxPrev").addEventListener("click", () => {
     if (state.lightboxIndex > 0) {
       state.lightboxIndex--;
