@@ -12,6 +12,8 @@ const state = {
   clientId: null,
   albumId: null,
   search: "",
+  dayFilter: null,
+  activityByDay: [],
   sort: "-captured_at",
   selected: new Set(),
   lightboxIndex: -1,
@@ -83,7 +85,7 @@ function parseTags(raw) {
   return [];
 }
 
-function buildFilter() {
+function buildFilter(opts = {}) {
   const parts = [];
   if (state.view === "starred") parts.push("starred = true");
   if (state.tag) {
@@ -95,6 +97,14 @@ function buildFilter() {
   if (state.albumId) {
     parts.push(`album = "${state.albumId}"`);
   }
+  if (state.dayFilter && !opts.skipDayFilter) {
+    const d = state.dayFilter;
+    const start = `${d} 00:00:00.000Z`;
+    const end = `${d} 23:59:59.999Z`;
+    parts.push(
+      `((captured_at >= "${start}" && captured_at <= "${end}") || (captured_at = "" && created >= "${start}" && created <= "${end}"))`,
+    );
+  }
   if (state.search.trim()) {
     const q = state.search.trim().replace(/"/g, '\\"');
     parts.push(
@@ -102,6 +112,61 @@ function buildFilter() {
     );
   }
   return parts.length ? parts.join(" && ") : "";
+}
+
+function dayKeyOf(item) {
+  return (item.captured_at || item.created || "").slice(0, 10);
+}
+
+function formatDayShort(isoDay) {
+  if (!isoDay) return "—";
+  const d = new Date(`${isoDay}T12:00:00`);
+  return d.toLocaleDateString("nl-NL", { day: "numeric", month: "short" });
+}
+
+function formatDayLong(isoDay) {
+  if (!isoDay) return "—";
+  const d = new Date(`${isoDay}T12:00:00`);
+  return d.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+}
+
+async function loadActivityByDay() {
+  try {
+    const filter = buildFilter({ skipDayFilter: true });
+    const params = new URLSearchParams({
+      page: "1",
+      perPage: "500",
+      sort: "-captured_at",
+      fields: "captured_at,created",
+    });
+    if (filter) params.set("filter", filter);
+
+    const res = await fetch(`${API}/collections/${COLLECTION}/records?${params}`);
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    const byDay = new Map();
+    for (const item of data.items) {
+      const d = dayKeyOf(item);
+      if (!d) continue;
+      byDay.set(d, (byDay.get(d) || 0) + 1);
+    }
+    state.activityByDay = [...byDay.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .slice(-30);
+  } catch {
+    state.activityByDay = [];
+  }
+}
+
+function updateDayFilterUi() {
+  const btn = $("clearDayFilter");
+  if (!btn) return;
+  if (state.dayFilter) {
+    btn.hidden = false;
+    btn.textContent = `${formatDayLong(state.dayFilter)} — filter wissen ×`;
+  } else {
+    btn.hidden = true;
+  }
 }
 
 async function listRecords(page = 1) {
@@ -239,31 +304,52 @@ function aggregateClients(items) {
   return [...map.values()].sort((a, b) => b.count - a.count);
 }
 
-function renderTimeline(items) {
+function renderTimeline() {
   const el = $("timeline");
-  const byDay = new Map();
-  for (const item of items) {
-    const d = (item.captured_at || item.created).slice(0, 10);
-    byDay.set(d, (byDay.get(d) || 0) + 1);
-  }
-  const days = [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0])).slice(-30);
+  const days = state.activityByDay;
   const max = Math.max(1, ...days.map(([, c]) => c));
   el.innerHTML = "";
+  updateDayFilterUi();
+
   if (!days.length) {
-    el.innerHTML = '<span class="hint">Geen activiteit</span>';
+    el.innerHTML =
+      '<p class="timeline-empty">Nog geen activiteit in deze selectie. Upload screenshots of pas filters in de zijbalk aan.</p>';
     return;
   }
+
   for (const [day, count] of days) {
-    const bar = document.createElement("div");
-    bar.className = "timeline-bar";
-    bar.style.height = `${(count / max) * 100}%`;
-    bar.title = `${day}: ${count}`;
+    const wrap = document.createElement("div");
+    wrap.className = "timeline-day";
+    wrap.setAttribute("role", "listitem");
+
+    const active = state.dayFilter === day;
+    const bar = document.createElement("button");
+    bar.type = "button";
+    bar.className = `timeline-bar${active ? " timeline-bar-active" : ""}`;
+    bar.style.height = `${Math.max(8, (count / max) * 48)}px`;
+    bar.title = `${formatDayLong(day)} — ${count} screenshot${count === 1 ? "" : "s"}`;
+    bar.setAttribute(
+      "aria-label",
+      `${formatDayLong(day)}, ${count} screenshot${count === 1 ? "" : "s"}${active ? ", filter actief" : ""}`,
+    );
+    bar.setAttribute("aria-pressed", active ? "true" : "false");
     bar.addEventListener("click", () => {
-      state.search = day;
-      $("searchInput").value = day;
+      state.dayFilter = state.dayFilter === day ? null : day;
       reload();
     });
-    el.appendChild(bar);
+
+    const label = document.createElement("span");
+    label.className = `timeline-day-label${active ? " timeline-day-label-active" : ""}`;
+    label.textContent = formatDayShort(day);
+
+    const countEl = document.createElement("span");
+    countEl.className = "timeline-day-count";
+    countEl.textContent = String(count);
+
+    wrap.appendChild(bar);
+    wrap.appendChild(label);
+    wrap.appendChild(countEl);
+    el.appendChild(wrap);
   }
 }
 
@@ -372,7 +458,14 @@ function renderGallery() {
   const gallery = $("gallery");
   const display = filteredForDuplicates(state.items);
   gallery.innerHTML = "";
-  $("galleryEmpty").hidden = display.length > 0;
+  const emptyEl = $("galleryEmpty");
+  emptyEl.hidden = display.length > 0;
+  if (!display.length && state.dayFilter) {
+    emptyEl.textContent = `Geen screenshots op ${formatDayLong(state.dayFilter)}. Klik op “filter wissen” bij Activiteit per dag.`;
+  } else if (!display.length) {
+    emptyEl.textContent =
+      "Nog geen screenshots. Installeer de Windows-client of upload hier.";
+  }
 
   for (const item of display) {
     const card = document.createElement("article");
@@ -770,8 +863,9 @@ async function reload(append = false) {
     }
     state.totalPages = data.totalPages;
     computePhashGroups(state.items);
+    await loadActivityByDay();
     renderStats();
-    renderTimeline(state.items);
+    renderTimeline();
     renderSidebarLists();
     renderGallery();
   } catch (err) {
@@ -811,6 +905,11 @@ async function init() {
   });
 
   $("refreshBtn").addEventListener("click", () => reload());
+
+  $("clearDayFilter")?.addEventListener("click", () => {
+    state.dayFilter = null;
+    reload();
+  });
 
   $("loadMoreBtn").addEventListener("click", () => reload(true));
 

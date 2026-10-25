@@ -123,7 +123,23 @@
           <p class="toast" id="uploadToast" role="status" hidden></p>
         </section>
 
-        <section class="timeline" id="timeline" aria-label="Activiteit per dag"></section>
+        <section class="timeline-panel" id="timelinePanel" aria-labelledby="timeline-heading">
+          <div class="timeline-head">
+            <div>
+              <h2 class="timeline-title" id="timeline-heading">Activiteit per dag</h2>
+              <p class="timeline-hint">Klik op een staafje om alleen screenshots van die dag te tonen. Klik opnieuw om het filter te verwijderen.</p>
+            </div>
+            <button
+              type="button"
+              class="filter-context-badge filter-context-badge-active timeline-day-clear"
+              id="clearDayFilter"
+              hidden
+            >
+              Dagfilter wissen ×
+            </button>
+          </div>
+          <div class="timeline" id="timeline" role="list" aria-label="Shots per dag"></div>
+        </section>
 
         <section class="gallery-wrap">
           <div class="gallery" id="gallery"></div>
