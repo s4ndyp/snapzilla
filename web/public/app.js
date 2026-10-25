@@ -9,7 +9,6 @@ const state = {
   albums: [],
   view: "all",
   tag: null,
-  clientId: null,
   albumId: null,
   search: "",
   dayFilter: null,
@@ -174,9 +173,6 @@ function buildFilter(opts = {}) {
   if (state.view === "starred") parts.push("starred = true");
   if (state.tag) {
     parts.push(`tags ~ "${state.tag.replace(/"/g, '\\"')}"`);
-  }
-  if (state.clientId) {
-    parts.push(`client_id = "${state.clientId.replace(/"/g, '\\"')}"`);
   }
   if (state.albumId) {
     parts.push(`album = "${state.albumId}"`);
@@ -429,17 +425,6 @@ function aggregateTags(items) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1]);
 }
 
-function aggregateClients(items) {
-  const map = new Map();
-  for (const item of items) {
-    const id = item.client_id || "onbekend";
-    const label = item.client_name || item.hostname || id;
-    if (!map.has(id)) map.set(id, { id, label, count: 0 });
-    map.get(id).count++;
-  }
-  return [...map.values()].sort((a, b) => b.count - a.count);
-}
-
 function renderCalendar() {
   const grid = $("calendarGrid");
   if (!grid) return;
@@ -532,22 +517,6 @@ function renderSidebarLists() {
     });
     li.appendChild(btn);
     tagList.appendChild(li);
-  }
-
-  const clientList = $("clientList");
-  clientList.innerHTML = "";
-  for (const c of aggregateClients(state.items)) {
-    const li = document.createElement("li");
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = `filter-btn${state.clientId === c.id ? " filter-btn-active" : ""}`;
-    btn.textContent = `${c.label} (${c.count})`;
-    btn.addEventListener("click", () => {
-      state.clientId = state.clientId === c.id ? null : c.id;
-      reload();
-    });
-    li.appendChild(btn);
-    clientList.appendChild(li);
   }
 
   const albumList = $("albumList");
