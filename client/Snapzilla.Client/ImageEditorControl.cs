@@ -10,6 +10,7 @@ enum EditTool
     Rectangle,
     Circle,
     Arrow,
+    Chain,
     Stamp,
     Text,
     Crop,
@@ -38,6 +39,8 @@ sealed class ImageEditorControl : UserControl
     bool _dragging;
     Point _startImg;
     Point _endImg;
+    Point? _chainAnchor;
+    Point? _chainHoverClient;
 
     public EditTool CurrentTool
     {
@@ -49,6 +52,15 @@ sealed class ImageEditorControl : UserControl
     {
         get => _stampKind;
         set => _stampKind = value;
+    }
+
+    public bool HasChainAnchor => _chainAnchor.HasValue;
+
+    public void EndChain()
+    {
+        _chainAnchor = null;
+        _chainHoverClient = null;
+        Invalidate();
     }
 
     public ImageEditorControl()
@@ -109,6 +121,8 @@ sealed class ImageEditorControl : UserControl
         _bitmap.Dispose();
         _bitmap = _undo[^1];
         _undo.RemoveAt(_undo.Count - 1);
+        _chainAnchor = null;
+        _chainHoverClient = null;
         Invalidate();
     }
 
@@ -142,12 +156,20 @@ sealed class ImageEditorControl : UserControl
         e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
         e.Graphics.DrawImage(_bitmap, rect);
 
-        if (_dragging && _tool is EditTool.Crop or EditTool.Rectangle or EditTool.Circle or EditTool.Arrow or EditTool.Stamp)
+        if (!_dragging && _tool == EditTool.Chain && _chainAnchor is Point anchorPt)
+        {
+            var c1 = ImageToClient(anchorPt);
+            var c2 = _chainHoverClient ?? c1;
+            using var dash = new Pen(_strokeColor, 2) { DashStyle = DashStyle.Dash };
+            e.Graphics.DrawLine(dash, c1, c2);
+        }
+
+        if (_dragging && _tool is EditTool.Crop or EditTool.Rectangle or EditTool.Circle or EditTool.Arrow or EditTool.Chain or EditTool.Stamp)
         {
             var c1 = ImageToClient(_startImg);
             var c2 = ImageToClient(_endImg);
             var preview = NormalizeRect(c1, c2);
-            if (_tool == EditTool.Arrow)
+            if (_tool is EditTool.Arrow or EditTool.Chain)
             {
                 using var pen = new Pen(_strokeColor, 2);
                 e.Graphics.DrawLine(pen, c1, c2);
@@ -195,7 +217,8 @@ sealed class ImageEditorControl : UserControl
         }
 
         _dragging = true;
-        _startImg = _endImg = imgPt;
+        _startImg = _tool == EditTool.Chain && _chainAnchor is Point chainStart ? chainStart : imgPt;
+        _endImg = imgPt;
 
         if (_tool is EditTool.Pen or EditTool.Highlight)
             PushUndo();
@@ -204,8 +227,19 @@ sealed class ImageEditorControl : UserControl
     protected override void OnMouseMove(MouseEventArgs e)
     {
         base.OnMouseMove(e);
-        if (!_dragging || _bitmap is null)
+        if (_bitmap is null)
             return;
+
+        if (!_dragging)
+        {
+            if (_tool == EditTool.Chain && _chainAnchor.HasValue)
+            {
+                _chainHoverClient = e.Location;
+                Invalidate();
+            }
+
+            return;
+        }
 
         _endImg = ClientToImage(e.Location);
         if (_tool is EditTool.Pen or EditTool.Highlight)
@@ -254,6 +288,11 @@ sealed class ImageEditorControl : UserControl
             case EditTool.Arrow:
                 DrawArrow(_startImg, _endImg);
                 break;
+            case EditTool.Chain:
+                DrawChainSegment(_startImg, _endImg);
+                _chainAnchor = _endImg;
+                _chainHoverClient = ImageToClient(_endImg);
+                break;
             case EditTool.Stamp:
                 DrawStampShape(_startImg, _endImg);
                 break;
@@ -294,6 +333,16 @@ sealed class ImageEditorControl : UserControl
             using var pen = new Pen(_strokeColor, 3);
             g.DrawLine(pen, a, b);
         }
+    }
+
+    void DrawChainSegment(Point a, Point b)
+    {
+        if (_bitmap is null || a == b)
+            return;
+        using var g = Graphics.FromImage(_bitmap);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var pen = new Pen(_strokeColor, 3);
+        g.DrawLine(pen, a, b);
     }
 
     void DrawRectangleShape(Point a, Point b)
