@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Snapzilla</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div class="bg-glow" aria-hidden="true"></div>
+
+    <header class="header">
+      <div class="logo">
+        <span class="logo-icon" aria-hidden="true">📸</span>
+        <div>
+          <h1>Snapzilla</h1>
+          <p class="subtitle">Screenshots opslaan, organiseren en analyseren</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <div class="storage-widget" id="statsWidget" title="Statistieken">
+          <div class="storage-line">
+            <span class="storage-free" id="statCount">0 shots</span>
+            <span class="storage-pct" id="statStorage">—</span>
+          </div>
+          <div class="storage-track" role="progressbar" aria-valuemin="0" aria-valuemax="100">
+            <div class="storage-fill" id="statBar"></div>
+          </div>
+        </div>
+        <button type="button" class="btn btn-ghost" id="refreshBtn" title="Ververs">
+          Ververs
+        </button>
+      </div>
+    </header>
+
+    <div class="shell">
+      <aside class="sidebar" aria-label="Filters">
+        <section class="sidebar-block">
+          <h2>Zoeken</h2>
+          <input
+            type="search"
+            id="searchInput"
+            class="input"
+            placeholder="Titel, OCR, tags, client…"
+            autocomplete="off"
+          />
+        </section>
+
+        <section class="sidebar-block">
+          <h2>Weergave</h2>
+          <div class="chip-row">
+            <button type="button" class="chip chip-active" data-view="all">Alles</button>
+            <button type="button" class="chip" data-view="starred">⭐ Favorieten</button>
+            <button type="button" class="chip" data-view="duplicates">Duplicaten</button>
+          </div>
+        </section>
+
+        <section class="sidebar-block">
+          <h2>Tags</h2>
+          <ul class="tag-list" id="tagList"></ul>
+          <p class="hint empty-tags" id="tagsEmpty">Nog geen tags</p>
+        </section>
+
+        <section class="sidebar-block">
+          <div class="sidebar-head">
+            <h2>Albums</h2>
+            <button type="button" class="btn btn-ghost btn-sm" id="newAlbumBtn">+</button>
+          </div>
+          <ul class="album-list" id="albumList"></ul>
+        </section>
+
+        <section class="sidebar-block">
+          <h2>Clients</h2>
+          <ul class="client-list" id="clientList"></ul>
+        </section>
+      </aside>
+
+      <main class="main">
+        <div class="toolbar">
+          <div class="toolbar-left">
+            <label class="checkbox-row compact">
+              <input type="checkbox" id="selectAll" />
+              <span>Alles selecteren</span>
+            </label>
+            <span class="badge" id="selectedBadge" hidden>0 geselecteerd</span>
+          </div>
+          <div class="toolbar-right">
+            <button type="button" class="btn btn-ghost btn-sm" id="bulkStarBtn" disabled>
+              ⭐
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm" id="bulkTagBtn" disabled>
+              Tag
+            </button>
+            <button type="button" class="btn btn-danger btn-sm" id="bulkDeleteBtn" disabled>
+              Verwijder
+            </button>
+            <select id="sortSelect" class="select" aria-label="Sorteren">
+              <option value="-captured_at">Nieuwste eerst</option>
+              <option value="captured_at">Oudste eerst</option>
+              <option value="-file_size">Grootste eerst</option>
+              <option value="title">Titel A–Z</option>
+            </select>
+          </div>
+        </div>
+
+        <section class="card upload-card" aria-labelledby="upload-heading">
+          <h2 id="upload-heading" class="sr-only">Upload</h2>
+          <label class="dropzone" id="dropzone" for="fileInput">
+            <input type="file" id="fileInput" accept="image/*" multiple hidden />
+            <span class="dropzone-icon" aria-hidden="true">↑</span>
+            <span class="dropzone-text">Sleep screenshots hierheen of plak vanuit klembord (Ctrl+V)</span>
+          </label>
+          <p class="toast" id="uploadToast" role="status" hidden></p>
+        </section>
+
+        <section class="timeline" id="timeline" aria-label="Activiteit per dag"></section>
+
+        <section class="gallery-wrap">
+          <div class="gallery" id="gallery"></div>
+          <p class="empty" id="galleryEmpty">Nog geen screenshots. Installeer de Windows-client of upload hier.</p>
+          <button type="button" class="btn btn-ghost load-more" id="loadMoreBtn" hidden>
+            Meer laden
+          </button>
+        </section>
+      </main>
+    </div>
+
+    <dialog class="lightbox" id="lightbox">
+      <div class="lightbox-inner">
+        <button type="button" class="lightbox-close" id="lightboxClose" aria-label="Sluiten">×</button>
+        <button type="button" class="lightbox-nav prev" id="lightboxPrev" aria-label="Vorige">‹</button>
+        <figure class="lightbox-figure">
+          <img id="lightboxImg" alt="" />
+          <figcaption id="lightboxCaption"></figcaption>
+        </figure>
+        <button type="button" class="lightbox-nav next" id="lightboxNext" aria-label="Volgende">›</button>
+        <aside class="lightbox-meta" id="lightboxMeta"></aside>
+      </div>
+    </dialog>
+
+    <dialog class="modal" id="albumModal">
+      <form method="dialog" class="modal-box" id="albumForm">
+        <h2>Nieuw album</h2>
+        <label class="field">
+          <span>Naam</span>
+          <input type="text" id="albumNameInput" class="input" required maxlength="200" />
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="albumCancelBtn">Annuleren</button>
+          <button type="submit" class="btn btn-primary">Opslaan</button>
+        </div>
+      </form>
+    </dialog>
+
+    <footer class="footer">
+      <span>Open server — geen login. PocketBase admin: <code>/_/</code></span>
+      <a href="/client-setup.html" id="clientSetupLink">Windows-client</a>
+    </footer>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>

@@ -1,0 +1,51 @@
+name: Windows client installer
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "client/**"
+      - ".github/workflows/client-windows.yml"
+  workflow_dispatch:
+
+jobs:
+  build_installer:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Publish client
+        working-directory: client
+        run: dotnet publish Snapzilla.Client/Snapzilla.Client.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -o publish
+
+      - name: Install Inno Setup
+        run: choco install innosetup -y
+
+      - name: Build installer
+        working-directory: client/installer
+        run: |
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" snapzilla.iss
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SnapzillaSetup
+          path: client/installer/Output/SnapzillaSetup.exe
+
+      - name: Upload to Release (main)
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: client-v${{ github.run_number }}
+          name: Snapzilla client build ${{ github.run_number }}
+          files: client/installer/Output/SnapzillaSetup.exe
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
