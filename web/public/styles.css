@@ -388,29 +388,114 @@ body {
   text-align: center;
 }
 
-.timeline {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  height: 48px;
+.timeline-panel {
   margin-bottom: 1rem;
-  padding: 0.5rem;
+  padding: 0.75rem 0.85rem;
   background: var(--bg-elevated);
   border: 1px solid var(--border);
   border-radius: var(--radius);
 }
 
-.timeline-bar {
-  flex: 1;
-  min-width: 4px;
-  background: var(--accent);
-  border-radius: 2px 2px 0 0;
-  opacity: 0.85;
+.timeline-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 0.65rem;
+}
+
+.timeline-title {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+.timeline-hint {
+  margin: 0.25rem 0 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  max-width: 36rem;
+  line-height: 1.35;
+}
+
+.timeline-day-clear {
+  flex-shrink: 0;
   cursor: pointer;
+  font: inherit;
+}
+
+.timeline {
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  gap: 6px;
+  min-height: 56px;
+  padding: 0.35rem 0.15rem 0;
+}
+
+.timeline:empty,
+.timeline .timeline-empty {
+  width: 100%;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+}
+
+.timeline-day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  flex: 0 0 auto;
+  min-width: 2rem;
+  max-width: 2.75rem;
+}
+
+.timeline-bar {
+  width: 100%;
+  min-height: 4px;
+  max-height: 48px;
+  background: var(--filter-pink-bg);
+  border: 1px solid var(--filter-pink-border);
+  border-radius: 4px 4px 2px 2px;
+  cursor: pointer;
+  padding: 0;
+  transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .timeline-bar:hover {
-  opacity: 1;
+  background: rgba(236, 72, 153, 0.38);
+  color: var(--filter-pink-text);
+}
+
+.timeline-bar-active {
+  background: var(--filter-pink-bg);
+  border-color: var(--filter-pink-text);
+  box-shadow: 0 0 0 2px rgba(236, 72, 153, 0.2);
+}
+
+.timeline-day-label {
+  font-size: 0.62rem;
+  line-height: 1.1;
+  color: var(--text-muted);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.timeline-day-label-active {
+  color: var(--filter-pink-text);
+  font-weight: 600;
+}
+
+.timeline-day-count {
+  font-size: 0.65rem;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .gallery {
