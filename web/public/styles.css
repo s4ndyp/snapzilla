@@ -292,16 +292,14 @@ body {
 }
 
 .tag-list,
-.album-list,
-.client-list {
+.album-list {
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
 .tag-list li,
-.album-list li,
-.client-list li {
+.album-list li {
   margin-bottom: 0.25rem;
 }
 
@@ -322,12 +320,6 @@ body {
 .filter-btn:hover {
   background: var(--bg-hover);
   color: var(--text);
-}
-
-.client-list .filter-btn-active {
-  background: var(--bg-hover);
-  color: var(--text);
-  border-color: var(--border);
 }
 
 .tag-list .filter-btn:hover,
