@@ -23,7 +23,7 @@ sealed class TrayHost : ApplicationContext
         };
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Volledig scherm (Ctrl+Shift+F11)", null, (_, _) => _ = CaptureAndUpload("fullscreen", ScreenCapture.CapturePrimaryScreen));
+        menu.Items.Add("Volledig scherm (Ctrl+Shift+F11)", null, (_, _) => _ = CaptureAndUpload("fullscreen", ScreenCapture.CapturePrimaryScreen()));
         menu.Items.Add("Actief venster (Ctrl+Shift+F12)", null, (_, _) => _ = CaptureAndUpload("window", ScreenCapture.CaptureActiveWindow()));
         menu.Items.Add("Regio (Ctrl+Shift+S)", null, (_, _) => CaptureRegion());
         menu.Items.Add(new ToolStripSeparator());
@@ -36,7 +36,7 @@ sealed class TrayHost : ApplicationContext
         _hotkeys.Register(
             Keys.F11,
             HotkeyHost.ModCtrl | HotkeyHost.ModShift,
-            () => _ = CaptureAndUpload("fullscreen", ScreenCapture.CapturePrimaryScreen));
+            () => _ = CaptureAndUpload("fullscreen", ScreenCapture.CapturePrimaryScreen()));
         _hotkeys.Register(
             Keys.F12,
             HotkeyHost.ModCtrl | HotkeyHost.ModShift,
