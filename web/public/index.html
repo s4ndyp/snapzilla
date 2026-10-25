@@ -83,14 +83,12 @@
 
       <main class="main">
         <div class="toolbar">
-          <div class="toolbar-left">
-            <label class="checkbox-row compact">
-              <input type="checkbox" id="selectAll" />
-              <span>Alles selecteren</span>
-            </label>
-            <span class="badge" id="selectedBadge" hidden>0 geselecteerd</span>
-          </div>
-          <div class="toolbar-right">
+          <label class="checkbox-row compact">
+            <input type="checkbox" id="selectAll" />
+            <span>Alles selecteren</span>
+          </label>
+          <span class="badge" id="selectedBadge" hidden>0 geselecteerd</span>
+          <div class="toolbar-actions">
             <button type="button" class="btn btn-ghost btn-sm" id="bulkStarBtn" disabled>
               ⭐
             </button>
@@ -104,7 +102,7 @@
             <button type="button" class="btn btn-danger btn-sm" id="bulkDeleteBtn" disabled>
               Verwijder
             </button>
-            <select id="sortSelect" class="select" aria-label="Sorteren">
+            <select id="sortSelect" class="select select-sm" aria-label="Sorteren">
               <option value="-captured_at">Nieuwste eerst</option>
               <option value="captured_at">Oudste eerst</option>
               <option value="-file_size">Grootste eerst</option>
@@ -113,6 +111,16 @@
           </div>
         </div>
 
+        <section class="gallery-wrap">
+          <div class="gallery" id="gallery"></div>
+          <p class="empty" id="galleryEmpty">Nog geen screenshots. Installeer de Windows-client of upload hier.</p>
+          <button type="button" class="btn btn-ghost load-more" id="loadMoreBtn" hidden>
+            Meer laden
+          </button>
+        </section>
+      </main>
+
+      <aside class="aside-right" aria-label="Upload en datum">
         <section class="card upload-card" aria-labelledby="upload-heading">
           <h2 id="upload-heading" class="sr-only">Upload</h2>
           <label class="dropzone" id="dropzone" for="fileInput">
@@ -123,32 +131,34 @@
           <p class="toast" id="uploadToast" role="status" hidden></p>
         </section>
 
-        <section class="timeline-panel" id="timelinePanel" aria-labelledby="timeline-heading">
-          <div class="timeline-head">
-            <div>
-              <h2 class="timeline-title" id="timeline-heading">Activiteit per dag</h2>
-              <p class="timeline-hint">Klik op een staafje om alleen screenshots van die dag te tonen. Klik opnieuw om het filter te verwijderen.</p>
-            </div>
-            <button
-              type="button"
-              class="filter-context-badge filter-context-badge-active timeline-day-clear"
-              id="clearDayFilter"
-              hidden
-            >
-              Dagfilter wissen ×
+        <section class="calendar-panel" id="calendarPanel" aria-labelledby="calendar-heading">
+          <div class="calendar-head">
+            <button type="button" class="btn btn-ghost btn-sm cal-nav" id="calPrev" aria-label="Vorige maand">
+              ‹
+            </button>
+            <button type="button" class="calendar-month-btn" id="calMonthBtn" aria-labelledby="calendar-heading">
+              —
+            </button>
+            <button type="button" class="btn btn-ghost btn-sm cal-nav" id="calNext" aria-label="Volgende maand">
+              ›
             </button>
           </div>
-          <div class="timeline" id="timeline" role="list" aria-label="Shots per dag"></div>
-        </section>
-
-        <section class="gallery-wrap">
-          <div class="gallery" id="gallery"></div>
-          <p class="empty" id="galleryEmpty">Nog geen screenshots. Installeer de Windows-client of upload hier.</p>
-          <button type="button" class="btn btn-ghost load-more" id="loadMoreBtn" hidden>
-            Meer laden
+          <h2 class="calendar-title" id="calendar-heading">Activiteit</h2>
+          <p class="calendar-hint">Klik op een dag of op de maandnaam om te filteren.</p>
+          <button
+            type="button"
+            class="filter-context-badge filter-context-badge-active calendar-clear"
+            id="clearDateFilter"
+            hidden
+          >
+            Filter wissen ×
           </button>
+          <div class="calendar-weekdays" aria-hidden="true">
+            <span>ma</span><span>di</span><span>wo</span><span>do</span><span>vr</span><span>za</span><span>zo</span>
+          </div>
+          <div class="calendar-grid" id="calendarGrid" role="grid" aria-label="Kalender"></div>
         </section>
-      </main>
+      </aside>
     </div>
 
     <dialog class="lightbox" id="lightbox">
