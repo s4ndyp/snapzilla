@@ -11,5 +11,11 @@
     <Company>Snapzilla</Company>
     <Product>Snapzilla Capture Client</Product>
     <Description>Upload screenshots to your Snapzilla server</Description>
+    <ApplicationIcon>Assets\snapzilla.ico</ApplicationIcon>
   </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Assets\snapzilla.ico">
+      <LogicalName>snapzilla.ico</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
 </Project>
