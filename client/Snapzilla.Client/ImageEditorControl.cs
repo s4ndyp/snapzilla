@@ -233,11 +233,11 @@ sealed class ImageEditorControl : UserControl
         const float head = 12f;
         var angle = Math.Atan2(b.Y - a.Y, b.X - a.X);
         var p1 = new PointF(
-            b.X - head * Math.Cos(angle - Math.PI / 6),
-            b.Y - head * Math.Sin(angle - Math.PI / 6));
+            (float)(b.X - head * Math.Cos(angle - Math.PI / 6)),
+            (float)(b.Y - head * Math.Sin(angle - Math.PI / 6)));
         var p2 = new PointF(
-            b.X - head * Math.Cos(angle + Math.PI / 6),
-            b.Y - head * Math.Sin(angle + Math.PI / 6));
+            (float)(b.X - head * Math.Cos(angle + Math.PI / 6)),
+            (float)(b.Y - head * Math.Sin(angle + Math.PI / 6)));
         g.DrawLine(pen, b, p1);
         g.DrawLine(pen, b, p2);
     }
