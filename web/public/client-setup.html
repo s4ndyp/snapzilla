@@ -23,11 +23,21 @@
         <li>Installeer <code>SnapzillaSetup.exe</code> van Releases.</li>
         <li>Open Snapzilla uit het systeemvak → Instellingen.</li>
         <li>
-          Zet <strong>Server URL</strong> op je Snapzilla-adres, bijvoorbeeld
-          <code>http://192.168.1.10:3000</code> (zonder slash aan het eind).
+          Zet <strong>Server URL</strong> op je Snapzilla-adres (zonder slash aan het eind).
+          Draait de web-UI op poort <strong>80</strong>, gebruik bijv.
+          <code>http://10.5.0.153</code>. Alleen bij een andere poort het poortnummer
+          toevoegen, bv. <code>http://192.168.1.10:3000</code>.
         </li>
         <li>Kies een clientnaam (optioneel) en sla op.</li>
       </ol>
+
+      <h2>Na een capture</h2>
+      <p>
+        Je ziet eerst een <strong>preview</strong> met <em>Upload naar server</em> of
+        <em>Lokaal opslaan</em>. Uploadfouten staan in het logboek (Instellingen of
+        systeemvak → Logboek openen). Gebruik <em>Test verbinding</em> in instellingen
+        om <code>/api/health</code> te controleren.
+      </p>
 
       <h2>Sneltoetsen (standaard)</h2>
       <ul>

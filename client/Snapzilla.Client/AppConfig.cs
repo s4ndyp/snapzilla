@@ -4,7 +4,7 @@ namespace Snapzilla.Client;
 
 sealed class AppConfig
 {
-    public string ServerUrl { get; set; } = "http://localhost:3000";
+    public string ServerUrl { get; set; } = "http://localhost";
     public string ClientName { get; set; } = Environment.MachineName;
     public string ClientId { get; set; } = "";
     public bool StartWithWindows { get; set; } = true;

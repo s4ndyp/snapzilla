@@ -6,7 +6,7 @@ sealed class TrayHost : ApplicationContext
 {
     readonly NotifyIcon _tray;
     readonly AppConfig _config;
-    readonly UploadService _upload;
+    UploadService _upload;
     readonly HotkeyHost _hotkeys;
 
     public TrayHost()
@@ -14,6 +14,7 @@ sealed class TrayHost : ApplicationContext
         _config = AppConfig.Load();
         _upload = new UploadService(_config);
         StartupHelper.SetRunAtStartup(_config.StartWithWindows);
+        ClientLog.Info($"Snapzilla gestart — server {_config.ServerUrl}");
 
         _tray = new NotifyIcon
         {
@@ -23,11 +24,12 @@ sealed class TrayHost : ApplicationContext
         };
 
         var menu = new ContextMenuStrip();
-        menu.Items.Add("Volledig scherm (Ctrl+Shift+F11)", null, (_, _) => _ = CaptureAndUpload("fullscreen", ScreenCapture.CapturePrimaryScreen()));
-        menu.Items.Add("Actief venster (Ctrl+Shift+F12)", null, (_, _) => _ = CaptureAndUpload("window", ScreenCapture.CaptureActiveWindow()));
+        menu.Items.Add("Volledig scherm (Ctrl+Shift+F11)", null, (_, _) => CaptureAndPreview("fullscreen", ScreenCapture.CapturePrimaryScreen()));
+        menu.Items.Add("Actief venster (Ctrl+Shift+F12)", null, (_, _) => CaptureAndPreview("window", ScreenCapture.CaptureActiveWindow()));
         menu.Items.Add("Regio (Ctrl+Shift+S)", null, (_, _) => CaptureRegion());
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("Instellingen…", null, (_, _) => ShowSettings());
+        menu.Items.Add("Logboek openen", null, (_, _) => ClientLog.OpenInEditor());
         menu.Items.Add("Afsluiten", null, (_, _) => ExitThread());
         _tray.ContextMenuStrip = menu;
         _tray.DoubleClick += (_, _) => ShowSettings();
@@ -36,11 +38,11 @@ sealed class TrayHost : ApplicationContext
         _hotkeys.Register(
             Keys.F11,
             HotkeyHost.ModCtrl | HotkeyHost.ModShift,
-            () => _ = CaptureAndUpload("fullscreen", ScreenCapture.CapturePrimaryScreen()));
+            () => CaptureAndPreview("fullscreen", ScreenCapture.CapturePrimaryScreen()));
         _hotkeys.Register(
             Keys.F12,
             HotkeyHost.ModCtrl | HotkeyHost.ModShift,
-            () => _ = CaptureAndUpload("window", ScreenCapture.CaptureActiveWindow()));
+            () => CaptureAndPreview("window", ScreenCapture.CaptureActiveWindow()));
         _hotkeys.Register(
             Keys.S,
             HotkeyHost.ModCtrl | HotkeyHost.ModShift,
@@ -49,8 +51,9 @@ sealed class TrayHost : ApplicationContext
 
     void ShowSettings()
     {
-        using var form = new SettingsForm(_config);
-        form.ShowDialog();
+        using var form = new SettingsForm(_config, _upload);
+        if (form.ShowDialog() == DialogResult.OK)
+            _upload = new UploadService(_config);
     }
 
     void CaptureRegion()
@@ -59,25 +62,26 @@ sealed class TrayHost : ApplicationContext
         if (overlay.ShowDialog() != DialogResult.OK || overlay.SelectedRegion is not { } rect)
             return;
         var png = ScreenCapture.CaptureScreen(rect);
-        _ = CaptureAndUpload("region", png);
+        CaptureAndPreview("region", png);
     }
 
-    async Task CaptureAndUpload(string mode, byte[] png)
+    void CaptureAndPreview(string mode, byte[] png)
     {
         try
         {
-            _tray.ShowBalloonTip(2000, "Snapzilla", "Uploaden…", ToolTipIcon.Info);
-            await _upload.UploadAsync(png, mode);
-            _tray.ShowBalloonTip(2000, "Snapzilla", "Screenshot opgeslagen", ToolTipIcon.Info);
+            using var preview = new CapturePreviewForm(png, mode, _upload);
+            preview.ShowDialog();
         }
         catch (Exception ex)
         {
+            ClientLog.Error("Preview kon niet openen", ex);
             _tray.ShowBalloonTip(4000, "Snapzilla", ex.Message, ToolTipIcon.Error);
         }
     }
 
     protected override void ExitThreadCore()
     {
+        ClientLog.Info("Snapzilla afgesloten");
         _hotkeys.Dispose();
         _tray.Visible = false;
         _tray.Dispose();

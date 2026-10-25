@@ -57,7 +57,8 @@ Collecties worden automatisch aangemaakt via `pocketbase/pb_migrations/`.
 Zie ook `/client-setup.html` op de server.
 
 1. Download `SnapzillaSetup.exe` uit [Releases](https://github.com/s4ndyp/snapzilla/releases) (build bij merge naar `main`).
-2. Server-URL instellen (bijv. `http://192.168.1.10:3000`).
+2. Server-URL instellen — basis-URL van de web-UI (poort 80: geen `:3000`, bv. `http://10.5.0.153`).
+3. Na capture: preview → **Upload** of **Lokaal opslaan**; bij problemen **Logboek openen** in instellingen.
 
 Hotkeys:
 
