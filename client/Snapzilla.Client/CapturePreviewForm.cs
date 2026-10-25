@@ -17,6 +17,7 @@ sealed class CapturePreviewForm : Form
     readonly ServerCatalogService _catalog;
     readonly ImageEditorControl _editor;
     readonly Label _status;
+    readonly TextBox _titleBox;
     readonly TextBox _tagsBox;
     readonly TextBox _albumBox;
     readonly Button _uploadBtn;
@@ -81,23 +82,33 @@ sealed class CapturePreviewForm : Form
 
         SelectTool(EditTool.Pen);
 
-        var bottom = new Panel { Dock = DockStyle.Bottom, Height = 128, Padding = new Padding(8) };
+        var bottom = new Panel { Dock = DockStyle.Bottom, Height = 158, Padding = new Padding(8) };
 
-        var tagsLabel = new Label { Text = "Tags (komma-gescheiden)", AutoSize = true, Location = new Point(8, 8) };
+        var titleLabel = new Label { Text = "Titel", AutoSize = true, Location = new Point(8, 8) };
+        DarkTheme.StyleLabel(titleLabel);
+        _titleBox = new TextBox
+        {
+            Location = new Point(8, 28),
+            Width = 420,
+            PlaceholderText = "Optioneel — bijv. bug login-scherm",
+        };
+        DarkTheme.StyleInput(_titleBox);
+
+        var tagsLabel = new Label { Text = "Tags (komma-gescheiden)", AutoSize = true, Location = new Point(8, 58) };
         DarkTheme.StyleLabel(tagsLabel);
-        _tagsBox = new TextBox { Location = new Point(8, 28), Width = 420 };
+        _tagsBox = new TextBox { Location = new Point(8, 78), Width = 420 };
         DarkTheme.StyleInput(_tagsBox);
         WireAutocomplete(_tagsBox, isTags: true);
 
-        var albumLabel = new Label { Text = "Album", AutoSize = true, Location = new Point(8, 58) };
+        var albumLabel = new Label { Text = "Album", AutoSize = true, Location = new Point(8, 108) };
         DarkTheme.StyleLabel(albumLabel);
-        _albumBox = new TextBox { Location = new Point(8, 78), Width = 420, PlaceholderText = "Optioneel — typ om te zoeken" };
+        _albumBox = new TextBox { Location = new Point(8, 128), Width = 420, PlaceholderText = "Optioneel — typ om te zoeken" };
         DarkTheme.StyleInput(_albumBox);
         WireAutocomplete(_albumBox, isTags: false);
 
         _status = new Label
         {
-            Location = new Point(440, 82),
+            Location = new Point(440, 112),
             AutoSize = true,
             Text = $"Modus: {captureMode}",
         };
@@ -108,7 +119,7 @@ sealed class CapturePreviewForm : Form
             FlowDirection = FlowDirection.RightToLeft,
             Dock = DockStyle.Right,
             Width = 360,
-            Padding = new Padding(0, 44, 0, 0),
+            Padding = new Padding(0, 54, 0, 0),
         };
 
         var closeBtn = new Button { Text = "Sluiten", AutoSize = true };
@@ -125,7 +136,7 @@ sealed class CapturePreviewForm : Form
 
         buttons.Controls.AddRange([closeBtn, _saveBtn, _uploadBtn]);
 
-        bottom.Controls.AddRange([tagsLabel, _tagsBox, albumLabel, _albumBox, _status, buttons]);
+        bottom.Controls.AddRange([titleLabel, _titleBox, tagsLabel, _tagsBox, albumLabel, _albumBox, _status, buttons]);
 
         Controls.Add(_editor);
         Controls.Add(bottom);
@@ -264,9 +275,11 @@ sealed class CapturePreviewForm : Form
         {
             var png = _editor.ExportPng();
             var albumId = _catalog.ResolveAlbumId(_albumBox.Text);
+            var title = _titleBox.Text.Trim();
             await _upload.UploadAsync(
                 png,
                 _captureMode,
+                title: title.Length > 0 ? title : null,
                 tags: ParseTags(),
                 albumId: albumId);
             _status.Text = "Upload geslaagd.";

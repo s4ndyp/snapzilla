@@ -535,6 +535,52 @@ body {
   padding: 0 0.1rem;
 }
 
+.shot-card-top-left {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.shot-title {
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.12rem 0.35rem;
+  margin: 0;
+  cursor: pointer;
+  text-align: left;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shot-title:hover {
+  color: var(--filter-pink-text);
+  background: var(--filter-pink-bg);
+  border-color: var(--filter-pink-border);
+}
+
+.shot-title-add {
+  font-weight: 500;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.shot-title-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.78rem;
+  padding: 0.15rem 0.35rem;
+}
+
 .shot-tag-badges {
   display: flex;
   flex-wrap: wrap;

@@ -67,6 +67,83 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+function shotTitleText(item) {
+  return (item?.title || "").trim();
+}
+
+function isAutoCaptureTitle(title) {
+  return /^Capture\s+\d/i.test((title || "").trim());
+}
+
+function galleryTitleLabel(item) {
+  const t = shotTitleText(item);
+  if (!t || isAutoCaptureTitle(t)) return "";
+  return t;
+}
+
+async function saveShotTitle(item, rawTitle) {
+  const title = rawTitle.trim();
+  await patchRecord(item.id, { title });
+  item.title = title;
+}
+
+function beginInlineTitleEdit(item, anchorEl) {
+  const input = document.createElement("input");
+  input.type = "text";
+  input.className = "shot-title-input input";
+  input.maxLength = 500;
+  input.value = galleryTitleLabel(item) || shotTitleText(item);
+  input.placeholder = "Titel…";
+  anchorEl.replaceWith(input);
+  input.focus();
+  input.select();
+
+  let done = false;
+  const finish = async (revert) => {
+    if (done) return;
+    done = true;
+    if (revert) {
+      renderGallery();
+      return;
+    }
+    try {
+      await saveShotTitle(item, input.value);
+      renderGallery();
+    } catch (err) {
+      showToast(err.message, true);
+      renderGallery();
+    }
+  };
+
+  input.addEventListener("click", (e) => e.stopPropagation());
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    if (e.key === "Enter") {
+      e.preventDefault();
+      finish(false);
+    }
+    if (e.key === "Escape") {
+      e.preventDefault();
+      finish(true);
+    }
+  });
+  input.addEventListener("blur", () => finish(false));
+}
+
+function appendGalleryTitleControl(top, item) {
+  const label = galleryTitleLabel(item);
+  const el = document.createElement("button");
+  el.type = "button";
+  el.className = label ? "shot-title" : "shot-title shot-title-add";
+  el.textContent = label || "+ Titel";
+  el.title = label ? "Titel bewerken" : "Titel toevoegen";
+  el.addEventListener("click", (e) => {
+    e.stopPropagation();
+    beginInlineTitleEdit(item, el);
+  });
+  top.appendChild(el);
+}
+
 function albumIdOf(item) {
   if (!item?.album) return "";
   return typeof item.album === "string" ? item.album : item.album.id || "";
@@ -485,7 +562,12 @@ function renderGallery() {
       updateBulkUi();
       card.classList.toggle("selected", check.checked);
     });
-    top.appendChild(check);
+
+    const topLeft = document.createElement("div");
+    topLeft.className = "shot-card-top-left";
+    topLeft.appendChild(check);
+    appendGalleryTitleControl(topLeft, item);
+    top.appendChild(topLeft);
 
     const tagBadgesHtml = renderShotTagBadges(item);
     if (tagBadgesHtml) {
@@ -527,6 +609,7 @@ function renderGallery() {
 
     card.addEventListener("click", (e) => {
       if (e.target === check) return;
+      if (e.target.closest(".shot-title, .shot-title-input")) return;
       openLightbox(item.id);
     });
 
@@ -694,6 +777,18 @@ function bindLightboxCanvas(item) {
 }
 
 function bindLightboxShotActions(item) {
+  $("lbSaveTitle")?.addEventListener("click", async () => {
+    const title = $("titleEditor").value.trim();
+    try {
+      await saveShotTitle(item, title);
+      $("lightboxCaption").textContent = title || "Screenshot";
+      showToast("Titel opgeslagen");
+      renderGallery();
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+
   $("lbSaveTags")?.addEventListener("click", async () => {
     const tags = $("tagsEditor").value
       .split(",")
@@ -736,9 +831,15 @@ function bindLightboxShotActions(item) {
 function renderLightboxShotActions(item) {
   const tagValue = parseTags(item.tags).join(", ");
   const albumSel = albumIdOf(item);
+  const titleVal = galleryTitleLabel(item) || shotTitleText(item);
   $("lightboxShotActions").innerHTML = `
     <div class="lightbox-shot-row">
       <button type="button" class="btn btn-ghost btn-sm" id="lbStar">${item.starred ? "★ Favoriet" : "☆ Favoriet"}</button>
+    </div>
+    <div class="lightbox-shot-row">
+      <label for="titleEditor">Titel</label>
+      <input class="input" id="titleEditor" value="${escapeHtml(titleVal)}" placeholder="Optionele titel" maxlength="500" />
+      <button type="button" class="btn btn-ghost btn-sm" id="lbSaveTitle">Opslaan</button>
     </div>
     <div class="lightbox-shot-row">
       <label for="tagsEditor">Tags</label>
@@ -767,7 +868,7 @@ function refreshLightbox() {
   if (!item) return;
   $("lightboxImg").src = `${fileUrl(item)}?t=${Date.now()}`;
   $("lightboxImg").hidden = false;
-  $("lightboxCaption").textContent = item.title || "Screenshot";
+  $("lightboxCaption").textContent = galleryTitleLabel(item) || "Screenshot";
 
   const colors = Array.isArray(item.colors) ? item.colors : [];
   const colorHtml = colors

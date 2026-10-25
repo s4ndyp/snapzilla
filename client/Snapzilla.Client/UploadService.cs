@@ -26,7 +26,7 @@ sealed class UploadService(AppConfig config)
         var image = new ByteArrayContent(png);
         image.Headers.ContentType = new MediaTypeHeaderValue("image/png");
         content.Add(image, "image", $"snap_{DateTime.UtcNow:yyyyMMdd_HHmmss}.png");
-        content.Add(new StringContent(title ?? $"Capture {DateTime.Now:g}"), "title");
+        content.Add(new StringContent(title ?? ""), "title");
         content.Add(new StringContent(DateTime.UtcNow.ToString("o")), "captured_at");
         content.Add(new StringContent(captureMode), "capture_mode");
         content.Add(new StringContent(config.ClientId), "client_id");
