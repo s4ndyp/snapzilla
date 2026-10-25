@@ -923,6 +923,28 @@ function drawStampShape(ctx, rect, kind, color, preview = false) {
   ctx.restore();
 }
 
+function endEditChain(ctx, canvas) {
+  state.editChainAnchor = null;
+  state.editDrawing = false;
+  if (ctx && canvas && state.editSnapshot) {
+    ctx.putImageData(state.editSnapshot, 0, 0);
+  }
+  showToast("Lijnketting beëindigd");
+}
+
+function drawChainPreview(ctx, from, to) {
+  ctx.save();
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = state.editColor;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(to.x, to.y);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function setActiveEditTool(tool) {
   state.editTool = tool;
   if (tool !== "chain") state.editChainAnchor = null;
@@ -1039,14 +1061,21 @@ function bindLightboxCanvas(item) {
   };
 
   canvas.onmousemove = (e) => {
-    if (!state.lightboxEditing || !state.editDrawing || !state.editStart) return;
+    if (!state.lightboxEditing) return;
     const pt = canvasPoint(canvas, e);
-    if (state.editTool === "pen" || state.editTool === "highlight") {
-      drawShape(state.editStart, pt);
-      state.editStart = pt;
-      state.editSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    } else {
-      drawShape(state.editStart, pt);
+    if (state.editDrawing && state.editStart) {
+      if (state.editTool === "pen" || state.editTool === "highlight") {
+        drawShape(state.editStart, pt);
+        state.editStart = pt;
+        state.editSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      } else {
+        drawShape(state.editStart, pt);
+      }
+      return;
+    }
+    if (state.editTool === "chain" && state.editChainAnchor && state.editSnapshot) {
+      ctx.putImageData(state.editSnapshot, 0, 0);
+      drawChainPreview(ctx, state.editChainAnchor, pt);
     }
   };
 
@@ -1071,11 +1100,9 @@ function bindLightboxCanvas(item) {
 
   canvas.onkeydown = (e) => {
     if (!state.lightboxEditing) return;
-    if (e.key === "Escape" && state.editTool === "chain") {
-      state.editChainAnchor = null;
-      state.editDrawing = false;
+    if (e.key === "Escape" && state.editTool === "chain" && state.editChainAnchor) {
       e.preventDefault();
-      showToast("Lijnketting beëindigd");
+      endEditChain(ctx, canvas);
     }
   };
   canvas.tabIndex = 0;
@@ -1107,7 +1134,14 @@ function bindLightboxCanvas(item) {
   $("lbUndoEdit").onclick = () => undoLightboxEdit(ctx, canvas);
 
   document.querySelectorAll("[data-edtool]").forEach((btn) => {
-    btn.onclick = () => setActiveEditTool(btn.dataset.edtool);
+    btn.onclick = () => {
+      const tool = btn.dataset.edtool;
+      if (tool === "chain" && state.editTool === "chain" && state.editChainAnchor) {
+        endEditChain(ctx, canvas);
+        return;
+      }
+      setActiveEditTool(tool);
+    };
   });
 
   document.querySelectorAll(".stamp-btn").forEach((btn) => {
