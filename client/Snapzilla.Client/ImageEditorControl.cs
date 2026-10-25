@@ -21,7 +21,17 @@ sealed class ImageEditorControl : UserControl
     Bitmap? _bitmap;
     readonly List<Bitmap> _undo = new();
     EditTool _tool = EditTool.Pen;
-    readonly Color _color = Color.FromArgb(255, 107, 159, 255);
+    Color _strokeColor = Color.FromArgb(255, 107, 159, 255);
+
+    public Color StrokeColor
+    {
+        get => _strokeColor;
+        set
+        {
+            _strokeColor = value;
+            Invalidate();
+        }
+    }
     bool _dragging;
     Point _startImg;
     Point _endImg;
@@ -129,7 +139,7 @@ sealed class ImageEditorControl : UserControl
             var c2 = ImageToClient(_endImg);
             var preview = NormalizeRect(c1, c2);
             using var pen = new Pen(
-                _tool == EditTool.Crop ? Color.Lime : _color,
+                _tool == EditTool.Crop ? Color.Lime : _strokeColor,
                 2)
             {
                 DashStyle = _tool == EditTool.Crop ? DashStyle.Dash : DashStyle.Solid,
@@ -253,7 +263,7 @@ sealed class ImageEditorControl : UserControl
         }
         else
         {
-            using var pen = new Pen(_color, 3);
+            using var pen = new Pen(_strokeColor, 3);
             g.DrawLine(pen, a, b);
         }
     }
@@ -264,7 +274,7 @@ sealed class ImageEditorControl : UserControl
             return;
         using var g = Graphics.FromImage(_bitmap);
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        using var pen = new Pen(_color, 3);
+        using var pen = new Pen(_strokeColor, 3);
         g.DrawRectangle(pen, NormalizeRect(a, b));
     }
 
@@ -274,7 +284,7 @@ sealed class ImageEditorControl : UserControl
             return;
         using var g = Graphics.FromImage(_bitmap);
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        using var pen = new Pen(_color, 3);
+        using var pen = new Pen(_strokeColor, 3);
         g.DrawLine(pen, a, b);
 
         const float head = 12f;
@@ -295,7 +305,7 @@ sealed class ImageEditorControl : UserControl
             return;
         using var g = Graphics.FromImage(_bitmap);
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
-        using var brush = new SolidBrush(_color);
+        using var brush = new SolidBrush(_strokeColor);
         using var font = new Font("Segoe UI", 16, FontStyle.Bold);
         g.DrawString(text, font, brush, at);
     }
