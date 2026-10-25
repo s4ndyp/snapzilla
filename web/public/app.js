@@ -689,6 +689,21 @@ function updateBulkUi() {
   $("bulkDeleteBtn").disabled = dis;
   $("bulkAlbumBtn").disabled = dis;
   $("bulkAlbumSelect").disabled = dis;
+  syncSelectAllCheckbox();
+}
+
+function syncSelectAllCheckbox() {
+  const box = $("selectAll");
+  if (!box) return;
+  const display = filteredForDuplicates(state.items);
+  if (!display.length) {
+    box.checked = false;
+    box.indeterminate = false;
+    return;
+  }
+  const n = display.filter((i) => state.selected.has(i.id)).length;
+  box.checked = n === display.length;
+  box.indeterminate = n > 0 && n < display.length;
 }
 
 function selectedItems() {
@@ -1222,16 +1237,24 @@ async function uploadFiles(files, mode = "upload") {
   await reload();
 }
 
-async function reload(append = false) {
+async function reload(append = false, options = {}) {
+  const preserveSelection = options.preserveSelection !== false;
   try {
     const data = await listRecords(append ? state.page + 1 : 1);
     if (append) {
       state.page++;
       state.items.push(...data.items);
     } else {
+      const previousSelected = preserveSelection ? [...state.selected] : [];
       state.page = data.page;
       state.items = data.items;
       state.selected.clear();
+      if (preserveSelection) {
+        const visible = new Set(state.items.map((i) => i.id));
+        for (const id of previousSelected) {
+          if (visible.has(id)) state.selected.add(id);
+        }
+      }
       updateBulkUi();
     }
     state.totalPages = data.totalPages;
