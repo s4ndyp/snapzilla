@@ -443,9 +443,35 @@ body {
 
 .shot-card-top {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.35rem;
   min-height: 1.35rem;
   padding: 0 0.1rem;
+}
+
+.shot-tag-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+}
+
+.shot-tag-badge {
+  font-size: 0.62rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  color: var(--filter-pink-text);
+  background: var(--filter-pink-bg);
+  border: 1px solid var(--filter-pink-border);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .shot-check {
@@ -475,17 +501,31 @@ body {
 
 .shot-meta {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
   gap: 0.5rem;
-  padding: 0 0.15rem;
+  padding: 0 0.1rem;
   font-size: 0.75rem;
   line-height: 1.3;
   color: var(--text-muted);
 }
 
-.shot-date {
+.shot-meta-left {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  min-width: 0;
   flex: 1;
+}
+
+.shot-meta-right {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  max-width: 55%;
+}
+
+.shot-date {
   min-width: 0;
   white-space: nowrap;
   overflow: hidden;
@@ -495,6 +535,31 @@ body {
 .shot-star {
   color: var(--warning);
   flex-shrink: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+}
+
+.shot-album-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  color: var(--text-muted);
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shot-album-icon {
+  font-size: 0.75rem;
+  line-height: 1;
 }
 
 .shot-dup {

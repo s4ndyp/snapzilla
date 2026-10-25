@@ -267,21 +267,27 @@ function renderTimeline(items) {
   }
 }
 
-function updateFilterBadges() {
-  const tagBadge = $("tagFilterBadge");
-  if (tagBadge) {
-    tagBadge.textContent = state.tag ? `#${state.tag}` : "Alle tags";
-    tagBadge.classList.toggle("filter-context-badge-active", Boolean(state.tag));
-  }
+function albumNameOf(item) {
+  const id = albumIdOf(item);
+  if (!id) return "";
+  return state.albums.find((a) => a.id === id)?.name || "Album";
+}
 
-  const albumBadge = $("albumFilterBadge");
-  if (albumBadge) {
-    const name = state.albumId
-      ? state.albums.find((a) => a.id === state.albumId)?.name || "Album"
-      : "Alle albums";
-    albumBadge.innerHTML = `<span class="badge-icon" aria-hidden="true">📁</span> ${escapeHtml(name)}`;
-    albumBadge.classList.toggle("filter-context-badge-active", Boolean(state.albumId));
-  }
+function renderShotTagBadges(item) {
+  if (state.tag) return "";
+  const tags = parseTags(item.tags);
+  if (!tags.length) return "";
+  return tags
+    .slice(0, 3)
+    .map((t) => `<span class="shot-tag-badge">#${escapeHtml(t)}</span>`)
+    .join("");
+}
+
+function renderShotAlbumBadge(item) {
+  if (state.albumId) return "";
+  const name = albumNameOf(item);
+  if (!name) return "";
+  return `<span class="shot-album-badge"><span class="shot-album-icon" aria-hidden="true">📁</span>${escapeHtml(name)}</span>`;
 }
 
 function renderSidebarLists() {
@@ -351,8 +357,6 @@ function renderSidebarLists() {
     li.appendChild(btn);
     albumList.appendChild(li);
   }
-
-  updateFilterBadges();
 }
 
 function renderStats() {
@@ -391,6 +395,14 @@ function renderGallery() {
     });
     top.appendChild(check);
 
+    const tagBadgesHtml = renderShotTagBadges(item);
+    if (tagBadgesHtml) {
+      const tagWrap = document.createElement("div");
+      tagWrap.className = "shot-tag-badges";
+      tagWrap.innerHTML = tagBadgesHtml;
+      top.appendChild(tagWrap);
+    }
+
     const thumb = document.createElement("div");
     thumb.className = "shot-thumb";
 
@@ -409,8 +421,13 @@ function renderGallery() {
 
     const meta = document.createElement("div");
     meta.className = "shot-meta";
-    meta.innerHTML = `<span class="shot-date">${formatDate(item.captured_at || item.created)}</span>`;
-    if (item.starred) meta.innerHTML += '<span class="shot-star" title="Favoriet">★</span>';
+    const star = item.starred
+      ? '<span class="shot-star" title="Favoriet" aria-label="Favoriet">★</span>'
+      : "";
+    meta.innerHTML = `
+      <div class="shot-meta-left">${star}<span class="shot-date">${formatDate(item.captured_at || item.created)}</span></div>
+      <div class="shot-meta-right">${renderShotAlbumBadge(item)}</div>
+    `;
 
     card.appendChild(top);
     card.appendChild(thumb);
