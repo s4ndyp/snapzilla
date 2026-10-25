@@ -1153,15 +1153,41 @@ body {
   font-weight: 600;
 }
 
-.edit-stamp-select {
-  max-width: 11rem;
-  font-size: 0.78rem;
+.edit-stamp-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
 }
 
-.edit-stamp-select.edit-stamp-active {
-  border-color: var(--filter-pink-border);
+.stamp-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.stamp-btn svg {
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+.stamp-btn:hover {
+  background: rgba(236, 72, 153, 0.12);
+  color: var(--filter-pink-text);
+}
+
+.stamp-btn-active {
   background: var(--filter-pink-bg);
   color: var(--filter-pink-text);
+  border-color: var(--filter-pink-border);
 }
 
 .edit-color-picker {

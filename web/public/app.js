@@ -902,11 +902,11 @@ function setActiveEditTool(tool) {
   document.querySelectorAll("[data-edtool]").forEach((btn) => {
     btn.classList.toggle("edit-tool-btn-active", btn.dataset.edtool === tool);
   });
-  const stampSel = $("editStampSelect");
-  if (stampSel) {
-    stampSel.classList.toggle("edit-stamp-active", tool === "stamp");
-    if (tool !== "stamp") stampSel.value = "";
-  }
+  document.querySelectorAll(".stamp-btn").forEach((btn) => {
+    const active = tool === "stamp" && btn.dataset.stamp === state.editStamp;
+    btn.classList.toggle("stamp-btn-active", active);
+    btn.setAttribute("aria-pressed", active ? "true" : "false");
+  });
 }
 
 async function startLightboxEdit(item) {
@@ -1056,11 +1056,11 @@ function bindLightboxCanvas(item) {
     btn.onclick = () => setActiveEditTool(btn.dataset.edtool);
   });
 
-  $("editStampSelect")?.addEventListener("change", (e) => {
-    const kind = e.target.value;
-    if (!kind) return;
-    state.editStamp = kind;
-    setActiveEditTool("stamp");
+  document.querySelectorAll(".stamp-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.editStamp = btn.dataset.stamp || "check";
+      setActiveEditTool("stamp");
+    });
   });
 }
 
