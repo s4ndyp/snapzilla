@@ -1272,6 +1272,41 @@ body {
   min-width: 10rem;
 }
 
+.lightbox-shot-fields {
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 0.65rem;
+}
+
+.lightbox-shot-field {
+  display: flex;
+  flex: 1 1 0;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem 0.45rem;
+  min-width: 0;
+}
+
+.lightbox-shot-field label {
+  width: 100%;
+  min-width: 0;
+}
+
+.lightbox-shot-field .input,
+.lightbox-shot-field .select {
+  flex: 1 1 6rem;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .lightbox-shot-fields {
+    flex-wrap: wrap;
+  }
+  .lightbox-shot-field {
+    flex: 1 1 100%;
+  }
+}
+
 .select-sm {
   max-width: 9rem;
   font-size: 0.8rem;

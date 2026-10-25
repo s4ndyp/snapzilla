@@ -923,6 +923,28 @@ function drawStampShape(ctx, rect, kind, color, preview = false) {
   ctx.restore();
 }
 
+function endEditChain(ctx, canvas) {
+  state.editChainAnchor = null;
+  state.editDrawing = false;
+  if (ctx && canvas && state.editSnapshot) {
+    ctx.putImageData(state.editSnapshot, 0, 0);
+  }
+  showToast("Lijnketting beëindigd");
+}
+
+function drawChainPreview(ctx, from, to) {
+  ctx.save();
+  ctx.lineWidth = 3;
+  ctx.lineCap = "round";
+  ctx.strokeStyle = state.editColor;
+  ctx.setLineDash([6, 4]);
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(to.x, to.y);
+  ctx.stroke();
+  ctx.restore();
+}
+
 function setActiveEditTool(tool) {
   state.editTool = tool;
   if (tool !== "chain") state.editChainAnchor = null;
@@ -1039,14 +1061,21 @@ function bindLightboxCanvas(item) {
   };
 
   canvas.onmousemove = (e) => {
-    if (!state.lightboxEditing || !state.editDrawing || !state.editStart) return;
+    if (!state.lightboxEditing) return;
     const pt = canvasPoint(canvas, e);
-    if (state.editTool === "pen" || state.editTool === "highlight") {
-      drawShape(state.editStart, pt);
-      state.editStart = pt;
-      state.editSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    } else {
-      drawShape(state.editStart, pt);
+    if (state.editDrawing && state.editStart) {
+      if (state.editTool === "pen" || state.editTool === "highlight") {
+        drawShape(state.editStart, pt);
+        state.editStart = pt;
+        state.editSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      } else {
+        drawShape(state.editStart, pt);
+      }
+      return;
+    }
+    if (state.editTool === "chain" && state.editChainAnchor && state.editSnapshot) {
+      ctx.putImageData(state.editSnapshot, 0, 0);
+      drawChainPreview(ctx, state.editChainAnchor, pt);
     }
   };
 
@@ -1071,11 +1100,9 @@ function bindLightboxCanvas(item) {
 
   canvas.onkeydown = (e) => {
     if (!state.lightboxEditing) return;
-    if (e.key === "Escape" && state.editTool === "chain") {
-      state.editChainAnchor = null;
-      state.editDrawing = false;
+    if (e.key === "Escape" && state.editTool === "chain" && state.editChainAnchor) {
       e.preventDefault();
-      showToast("Lijnketting beëindigd");
+      endEditChain(ctx, canvas);
     }
   };
   canvas.tabIndex = 0;
@@ -1107,7 +1134,14 @@ function bindLightboxCanvas(item) {
   $("lbUndoEdit").onclick = () => undoLightboxEdit(ctx, canvas);
 
   document.querySelectorAll("[data-edtool]").forEach((btn) => {
-    btn.onclick = () => setActiveEditTool(btn.dataset.edtool);
+    btn.onclick = () => {
+      const tool = btn.dataset.edtool;
+      if (tool === "chain" && state.editTool === "chain" && state.editChainAnchor) {
+        endEditChain(ctx, canvas);
+        return;
+      }
+      setActiveEditTool(tool);
+    };
   });
 
   document.querySelectorAll(".stamp-btn").forEach((btn) => {
@@ -1178,20 +1212,22 @@ function renderLightboxShotActions(item) {
     <div class="lightbox-shot-row">
       <button type="button" class="btn btn-ghost btn-sm" id="lbStar">${item.starred ? "★ Favoriet" : "☆ Favoriet"}</button>
     </div>
-    <div class="lightbox-shot-row">
-      <label for="titleEditor">Titel</label>
-      <input class="input" id="titleEditor" value="${escapeHtml(titleVal)}" placeholder="Optionele titel" maxlength="500" />
-      <button type="button" class="btn btn-ghost btn-sm" id="lbSaveTitle">Opslaan</button>
-    </div>
-    <div class="lightbox-shot-row">
-      <label for="tagsEditor">Tags</label>
-      <input class="input" id="tagsEditor" value="${escapeHtml(tagValue)}" placeholder="werk, bug, ui" />
-      <button type="button" class="btn btn-ghost btn-sm" id="lbSaveTags">Opslaan</button>
-    </div>
-    <div class="lightbox-shot-row">
-      <label for="albumEditor">Album</label>
-      <select class="select" id="albumEditor">${renderAlbumSelectOptions(albumSel)}</select>
-      <button type="button" class="btn btn-ghost btn-sm" id="lbSaveAlbum">Opslaan</button>
+    <div class="lightbox-shot-row lightbox-shot-fields">
+      <div class="lightbox-shot-field">
+        <label for="titleEditor">Titel</label>
+        <input class="input" id="titleEditor" value="${escapeHtml(titleVal)}" placeholder="Optionele titel" maxlength="500" />
+        <button type="button" class="btn btn-ghost btn-sm" id="lbSaveTitle">Opslaan</button>
+      </div>
+      <div class="lightbox-shot-field">
+        <label for="tagsEditor">Tags</label>
+        <input class="input" id="tagsEditor" value="${escapeHtml(tagValue)}" placeholder="werk, bug, ui" />
+        <button type="button" class="btn btn-ghost btn-sm" id="lbSaveTags">Opslaan</button>
+      </div>
+      <div class="lightbox-shot-field">
+        <label for="albumEditor">Album</label>
+        <select class="select" id="albumEditor">${renderAlbumSelectOptions(albumSel)}</select>
+        <button type="button" class="btn btn-ghost btn-sm" id="lbSaveAlbum">Opslaan</button>
+      </div>
     </div>
   `;
   bindLightboxShotActions(item);
