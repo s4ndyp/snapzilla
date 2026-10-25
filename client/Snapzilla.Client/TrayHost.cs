@@ -19,7 +19,7 @@ sealed class TrayHost : ApplicationContext
 
         _tray = new NotifyIcon
         {
-            Icon = SystemIcons.Application,
+            Icon = SnapzillaIcons.App,
             Visible = true,
             Text = "Snapzilla",
         };

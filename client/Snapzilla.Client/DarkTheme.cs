@@ -15,6 +15,7 @@ static class DarkTheme
 
     public static void Apply(Form form)
     {
+        form.Icon = SnapzillaIcons.App;
         form.BackColor = Bg;
         form.ForeColor = Text;
         DarkTitleBarHelper.Enable(form);

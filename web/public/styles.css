@@ -75,8 +75,13 @@ body {
   gap: 0.75rem;
 }
 
-.logo-icon {
-  font-size: 1.75rem;
+.logo-mark {
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
 }
 
 .logo h1 {
