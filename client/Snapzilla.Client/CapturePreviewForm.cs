@@ -23,7 +23,7 @@ sealed class CapturePreviewForm : Form
     readonly Button _uploadBtn;
     readonly Button _saveBtn;
     readonly AutocompleteOverlay _suggestions;
-    readonly Dictionary<EditTool, Button> _toolButtons = new();
+    readonly Dictionary<EditTool, EditorToolButton> _toolButtons = new();
     readonly List<Button> _colorChips = new();
     readonly List<StampIconButton> _stampButtons = new();
 
@@ -53,15 +53,16 @@ sealed class CapturePreviewForm : Form
             WrapContents = true,
         };
 
-        AddToolButton(tools, "Pen", EditTool.Pen);
-        AddToolButton(tools, "Marker", EditTool.Highlight);
-        AddToolButton(tools, "Rechthoek", EditTool.Rectangle);
-        AddToolButton(tools, "Cirkel", EditTool.Circle);
-        AddToolButton(tools, "Pijl", EditTool.Arrow);
-        AddToolButton(tools, "Tekst", EditTool.Text);
-        AddToolButton(tools, "Bijsnijden", EditTool.Crop);
+        AddToolButton(tools, EditTool.Pen, "Pen");
+        AddToolButton(tools, EditTool.Highlight, "Marker");
+        AddToolButton(tools, EditTool.Rectangle, "Rechthoek");
+        AddToolButton(tools, EditTool.Circle, "Cirkel");
+        AddToolButton(tools, EditTool.Arrow, "Pijl");
+        AddToolButton(tools, EditTool.Chain, "Lijnketting — nogmaals klikken of Esc stopt");
+        AddToolButton(tools, EditTool.Text, "Tekst");
+        AddToolButton(tools, EditTool.Crop, "Bijsnijden");
 
-        tools.Controls.Add(new Panel { Width = 8, Height = 1 });
+        tools.Controls.Add(MakeDivider());
 
         foreach (var (kind, label) in new (StampKind, string)[]
                  {
@@ -79,12 +80,7 @@ sealed class CapturePreviewForm : Form
             tools.Controls.Add(btn);
         }
 
-        var undoBtn = new Button { Text = "Ongedaan", AutoSize = true, Margin = new Padding(12, 0, 0, 0) };
-        DarkTheme.StyleSecondary(undoBtn);
-        undoBtn.Click += (_, _) => _editor.Undo();
-        tools.Controls.Add(undoBtn);
-
-        tools.Controls.Add(new Panel { Width = 12, Height = 1 });
+        tools.Controls.Add(MakeDivider());
 
         foreach (var (color, title) in EditorColors)
         {
@@ -102,63 +98,71 @@ sealed class CapturePreviewForm : Form
             chip.AccessibleName = title;
         }
 
+        tools.Controls.Add(MakeDivider());
+
+        var undoBtn = new EditorUndoButton();
+        undoBtn.Click += (_, _) => _editor.Undo();
+        tools.Controls.Add(undoBtn);
+
         SelectTool(EditTool.Pen);
 
-        var bottom = new Panel { Dock = DockStyle.Bottom, Height = 158, Padding = new Padding(8) };
+        var bottom = new Panel { Dock = DockStyle.Bottom, Height = 96, Padding = new Padding(8) };
 
-        var titleLabel = new Label { Text = "Titel", AutoSize = true, Location = new Point(8, 8) };
-        DarkTheme.StyleLabel(titleLabel);
-        _titleBox = new TextBox
-        {
-            Location = new Point(8, 28),
-            Width = 420,
-            PlaceholderText = "Optioneel — bijv. bug login-scherm",
-        };
+        _titleBox = new TextBox { PlaceholderText = "Optionele titel", Dock = DockStyle.Fill, Margin = new Padding(0, 0, 8, 0) };
         DarkTheme.StyleInput(_titleBox);
-
-        var tagsLabel = new Label { Text = "Tags (komma-gescheiden)", AutoSize = true, Location = new Point(8, 58) };
-        DarkTheme.StyleLabel(tagsLabel);
-        _tagsBox = new TextBox { Location = new Point(8, 78), Width = 420 };
+        _tagsBox = new TextBox { Dock = DockStyle.Fill, PlaceholderText = "werk, bug, ui", Margin = new Padding(0, 0, 8, 0) };
         DarkTheme.StyleInput(_tagsBox);
         WireAutocomplete(_tagsBox, isTags: true);
-
-        var albumLabel = new Label { Text = "Album", AutoSize = true, Location = new Point(8, 108) };
-        DarkTheme.StyleLabel(albumLabel);
-        _albumBox = new TextBox { Location = new Point(8, 128), Width = 420, PlaceholderText = "Optioneel — typ om te zoeken" };
+        _albumBox = new TextBox { Dock = DockStyle.Fill, PlaceholderText = "Album — typ om te zoeken", Margin = new Padding(0, 0, 8, 0) };
         DarkTheme.StyleInput(_albumBox);
         WireAutocomplete(_albumBox, isTags: false);
 
-        _status = new Label
-        {
-            Location = new Point(440, 112),
-            AutoSize = true,
-            Text = $"Modus: {captureMode}",
-        };
+        _status = new Label { AutoSize = true, Text = $"Modus: {captureMode}", Anchor = AnchorStyles.Left | AnchorStyles.Top };
         DarkTheme.StyleLabel(_status);
 
-        var buttons = new FlowLayoutPanel
-        {
-            FlowDirection = FlowDirection.RightToLeft,
-            Dock = DockStyle.Right,
-            Width = 360,
-            Padding = new Padding(0, 54, 0, 0),
-        };
-
-        var closeBtn = new Button { Text = "Sluiten", AutoSize = true };
+        var closeBtn = new Button { Text = "Sluiten", AutoSize = true, Anchor = AnchorStyles.Right | AnchorStyles.Top };
         DarkTheme.StyleSecondary(closeBtn);
         closeBtn.Click += (_, _) => Close();
 
-        _saveBtn = new Button { Text = "Lokaal opslaan", AutoSize = true, Margin = new Padding(8, 0, 0, 0) };
+        _saveBtn = new Button { Text = "Lokaal opslaan", AutoSize = true, Margin = new Padding(8, 0, 0, 0), Anchor = AnchorStyles.Right | AnchorStyles.Top };
         DarkTheme.StyleSecondary(_saveBtn);
         _saveBtn.Click += (_, _) => SaveLocally();
 
-        _uploadBtn = new Button { Text = "Upload naar server", AutoSize = true, Margin = new Padding(8, 0, 0, 0) };
-        DarkTheme.StyleSecondary(_uploadBtn);
+        _uploadBtn = new Button { Text = "Upload naar server", AutoSize = true, Margin = new Padding(8, 0, 0, 0), Anchor = AnchorStyles.Right | AnchorStyles.Top };
+        DarkTheme.StylePrimary(_uploadBtn);
         _uploadBtn.Click += async (_, _) => await UploadAsync();
 
-        buttons.Controls.AddRange([closeBtn, _saveBtn, _uploadBtn]);
+        var metaRow = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 34,
+            ColumnCount = 10,
+            RowCount = 1,
+            Padding = new Padding(0),
+        };
+        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24f));
+        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24f));
+        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20f));
+        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 12f));
+        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
-        bottom.Controls.AddRange([titleLabel, _titleBox, tagsLabel, _tagsBox, albumLabel, _albumBox, _status, buttons]);
+        metaRow.Controls.Add(MakeMetaLabel("Titel"), 0, 0);
+        metaRow.Controls.Add(_titleBox, 1, 0);
+        metaRow.Controls.Add(MakeMetaLabel("Tags"), 2, 0);
+        metaRow.Controls.Add(_tagsBox, 3, 0);
+        metaRow.Controls.Add(MakeMetaLabel("Album"), 4, 0);
+        metaRow.Controls.Add(_albumBox, 5, 0);
+        metaRow.Controls.Add(_status, 6, 0);
+        metaRow.Controls.Add(_uploadBtn, 7, 0);
+        metaRow.Controls.Add(_saveBtn, 8, 0);
+        metaRow.Controls.Add(closeBtn, 9, 0);
+
+        bottom.Controls.Add(metaRow);
 
         Controls.Add(_editor);
         Controls.Add(bottom);
@@ -168,6 +172,13 @@ sealed class CapturePreviewForm : Form
         {
             if (_suggestions.HandlePreviewKey(e.KeyCode))
                 return;
+            if (e.KeyCode == Keys.Escape && _editor.CurrentTool == EditTool.Chain && _editor.HasChainAnchor)
+            {
+                _editor.EndChain();
+                e.Handled = true;
+                return;
+            }
+
             if (e.KeyCode == Keys.Escape)
                 Close();
         };
@@ -178,17 +189,49 @@ sealed class CapturePreviewForm : Form
         ClientLog.Info($"Preview/editor geopend ({captureMode}, {png.Length} bytes)");
     }
 
-    void AddToolButton(FlowLayoutPanel tools, string text, EditTool tool)
+    static Label MakeMetaLabel(string text)
     {
-        var b = new Button { Text = text, AutoSize = true, Margin = new Padding(0, 0, 6, 0) };
-        DarkTheme.StyleSecondary(b);
-        b.Click += (_, _) => SelectTool(tool);
+        var label = new Label
+        {
+            Text = text,
+            AutoSize = true,
+            Anchor = AnchorStyles.Left,
+            Padding = new Padding(0, 6, 6, 0),
+        };
+        DarkTheme.StyleLabel(label);
+        return label;
+    }
+
+    static Panel MakeDivider() =>
+        new()
+        {
+            Width = 1,
+            Height = 26,
+            Margin = new Padding(6, 4, 6, 0),
+            BackColor = DarkTheme.Border,
+        };
+
+    void AddToolButton(FlowLayoutPanel tools, EditTool tool, string accessibleName)
+    {
+        var b = new EditorToolButton(tool, accessibleName);
+        b.Click += (_, _) =>
+        {
+            if (tool == EditTool.Chain && _editor.CurrentTool == EditTool.Chain && _editor.HasChainAnchor)
+            {
+                _editor.EndChain();
+                return;
+            }
+
+            SelectTool(tool);
+        };
         _toolButtons[tool] = b;
         tools.Controls.Add(b);
     }
 
     void SelectTool(EditTool tool)
     {
+        if (tool != EditTool.Chain)
+            _editor.EndChain();
         _editor.CurrentTool = tool;
         foreach (var (t, btn) in _toolButtons)
         {
@@ -196,6 +239,8 @@ sealed class CapturePreviewForm : Form
                 DarkTheme.StyleToolActive(btn);
             else
                 DarkTheme.StyleSecondary(btn);
+            btn.ForeColor = t == tool ? DarkTheme.FilterPinkText : DarkTheme.Text;
+            btn.Invalidate();
         }
 
         foreach (var btn in _stampButtons)

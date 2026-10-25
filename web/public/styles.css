@@ -76,12 +76,12 @@ body {
 }
 
 .logo-mark {
-  width: 2.75rem;
-  height: 2.75rem;
-  border-radius: 10px;
+  width: 3.35rem;
+  height: 3.35rem;
+  border-radius: 12px;
   object-fit: cover;
   flex-shrink: 0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.4);
 }
 
 .logo h1 {
