@@ -175,15 +175,27 @@
             <button type="button" class="edit-tool-btn" data-edtool="rect">Rechthoek</button>
             <button type="button" class="edit-tool-btn" data-edtool="circle">Cirkel</button>
             <button type="button" class="edit-tool-btn" data-edtool="arrow">Pijl</button>
-            <select id="editStampSelect" class="select select-sm edit-stamp-select" aria-label="Stempel">
-              <option value="">Stempel — sleep grootte</option>
-              <option value="cross">Kruis</option>
-              <option value="check">Vink</option>
-              <option value="house">Huis</option>
-              <option value="lamp">Lamp</option>
-              <option value="computer">Computer</option>
-              <option value="lightning">Bliksem</option>
-            </select>
+            <span class="edit-tools-divider" aria-hidden="true"></span>
+            <div class="edit-stamp-row" role="group" aria-label="Stempels — sleep diagonaal voor grootte">
+              <button type="button" class="stamp-btn" data-stamp="cross" title="Kruis">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" d="M7 7l10 10M17 7L7 17"/></svg>
+              </button>
+              <button type="button" class="stamp-btn" data-stamp="check" title="Vink">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 13l5 5L19 7"/></svg>
+              </button>
+              <button type="button" class="stamp-btn" data-stamp="house" title="Huis">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M4 11l8-6 8 6v9H4v-9z"/><path fill="none" stroke="currentColor" stroke-width="2" d="M10 20v-6h4v6"/></svg>
+              </button>
+              <button type="button" class="stamp-btn" data-stamp="lamp" title="Lamp">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" d="M9 18h6M12 3a5 5 0 0 1 5 5c0 2-1 3.5-2 5H9c-1-1.5-2-3-2-5a5 5 0 0 1 5-5z"/></svg>
+              </button>
+              <button type="button" class="stamp-btn" data-stamp="computer" title="Computer">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><rect fill="none" stroke="currentColor" stroke-width="2" x="3" y="4" width="18" height="12" rx="1"/><path fill="none" stroke="currentColor" stroke-width="2" d="M8 20h8M12 16v4"/></svg>
+              </button>
+              <button type="button" class="stamp-btn" data-stamp="lightning" title="Bliksem">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M13 2L5 14h6l-1 8 9-12h-6l0-8z"/></svg>
+              </button>
+            </div>
             <span class="edit-tools-divider" aria-hidden="true"></span>
             <div class="edit-color-picker" id="editColorPicker" aria-label="Kleur">
               <button type="button" class="color-chip color-chip-active" data-color="#6b9fff" style="--chip:#6b9fff" title="Blauw"></button>
