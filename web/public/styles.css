@@ -1263,6 +1263,66 @@ body {
   gap: 0.5rem;
 }
 
+.bulk-star-on {
+  color: #fbbf24;
+}
+
+.bulk-star-off {
+  color: var(--text-muted);
+  font-weight: 400;
+}
+
+.bulk-star-off:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.bulk-tag-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  max-height: min(50vh, 280px);
+  overflow-y: auto;
+  margin: 0.75rem 0 1rem;
+  padding: 0.5rem;
+  background: var(--bg-hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.bulk-tag-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.88rem;
+  cursor: pointer;
+  padding: 0.25rem 0.35rem;
+  border-radius: 6px;
+}
+
+.bulk-tag-option:hover {
+  background: rgba(236, 72, 153, 0.08);
+}
+
+.bulk-tag-option input {
+  accent-color: var(--filter-pink-border);
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+  cursor: pointer;
+}
+
+.bulk-tag-option span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bulk-tag-option .bulk-tag-count {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+}
+
 .footer {
   position: relative;
   z-index: 1;
