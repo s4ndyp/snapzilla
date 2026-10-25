@@ -683,10 +683,109 @@ function updateBulkUi() {
   $("selectedBadge").textContent = `${n} geselecteerd`;
   const dis = n === 0;
   $("bulkStarBtn").disabled = dis;
+  $("bulkUnstarBtn").disabled = dis;
   $("bulkTagBtn").disabled = dis;
   $("bulkDeleteBtn").disabled = dis;
   $("bulkAlbumBtn").disabled = dis;
   $("bulkAlbumSelect").disabled = dis;
+}
+
+function selectedItems() {
+  return [...state.selected]
+    .map((id) => state.items.find((x) => x.id === id))
+    .filter(Boolean);
+}
+
+function tagStateForSelection(tag) {
+  const items = selectedItems();
+  if (!items.length) return "none";
+  let n = 0;
+  for (const item of items) {
+    if (parseTags(item.tags).includes(tag)) n++;
+  }
+  if (n === 0) return "none";
+  if (n === items.length) return "all";
+  return "some";
+}
+
+function openBulkTagModal() {
+  if (!state.selected.size) return;
+  const list = $("bulkTagList");
+  const empty = $("bulkTagEmpty");
+  list.innerHTML = "";
+  $("bulkTagHint").textContent = `${state.selected.size} screenshot${state.selected.size === 1 ? "" : "s"} geselecteerd`;
+  $("bulkTagNew").value = "";
+
+  const known = aggregateTags(state.items);
+  const tagNames = new Set(known.map(([t]) => t));
+  for (const item of selectedItems()) {
+    for (const t of parseTags(item.tags)) tagNames.add(t);
+  }
+  const sorted = [...tagNames].sort((a, b) => a.localeCompare(b, "nl"));
+
+  empty.hidden = sorted.length > 0;
+  for (const tag of sorted) {
+    const count = known.find(([t]) => t === tag)?.[1];
+    const label = document.createElement("label");
+    label.className = "bulk-tag-option";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.dataset.tag = tag;
+    const st = tagStateForSelection(tag);
+    cb.checked = st === "all";
+    cb.indeterminate = st === "some";
+    cb.addEventListener("change", () => {
+      cb.indeterminate = false;
+    });
+    const text = document.createElement("span");
+    text.textContent = tag;
+    label.appendChild(cb);
+    label.appendChild(text);
+    if (count != null) {
+      const meta = document.createElement("span");
+      meta.className = "bulk-tag-count";
+      meta.textContent = String(count);
+      label.appendChild(meta);
+    }
+    list.appendChild(label);
+  }
+
+  $("bulkTagModal").showModal();
+}
+
+async function applyBulkTags() {
+  const list = $("bulkTagList");
+  const toggles = [...list.querySelectorAll("input[type=checkbox][data-tag]")];
+  const newTag = $("bulkTagNew").value.trim();
+  const tagsToAddAlways = newTag ? [newTag] : [];
+
+  for (const id of state.selected) {
+    const item = state.items.find((x) => x.id === id);
+    if (!item) continue;
+    let tags = parseTags(item.tags);
+
+    for (const cb of toggles) {
+      const tag = cb.dataset.tag;
+      if (!tag) continue;
+      if (cb.checked) {
+        if (!tags.includes(tag)) tags.push(tag);
+      } else {
+        tags = tags.filter((t) => t !== tag);
+      }
+    }
+
+    for (const tag of tagsToAddAlways) {
+      if (!tags.includes(tag)) tags.push(tag);
+    }
+
+    await patchRecord(id, { tags });
+    item.tags = tags;
+  }
+
+  $("bulkTagModal").close();
+  showToast("Tags bijgewerkt");
+  renderSidebarLists();
+  renderGallery();
 }
 
 function stopLightboxEdit() {
@@ -1117,18 +1216,26 @@ async function init() {
     await reload();
   });
 
-  $("bulkTagBtn").addEventListener("click", async () => {
-    const tag = prompt("Tag toevoegen aan selectie:");
-    if (!tag?.trim()) return;
+  $("bulkUnstarBtn").addEventListener("click", async () => {
     for (const id of state.selected) {
       const item = state.items.find((x) => x.id === id);
-      if (!item) continue;
-      const tags = parseTags(item.tags);
-      if (!tags.includes(tag.trim())) tags.push(tag.trim());
-      await patchRecord(id, { tags });
+      if (item) await patchRecord(id, { starred: false });
     }
-    showToast("Tags bijgewerkt");
+    showToast("Favoriet verwijderd");
     await reload();
+  });
+
+  $("bulkTagBtn").addEventListener("click", () => openBulkTagModal());
+
+  $("bulkTagCancel")?.addEventListener("click", () => $("bulkTagModal").close());
+
+  $("bulkTagForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      await applyBulkTags();
+    } catch (err) {
+      showToast(err.message, true);
+    }
   });
 
   $("bulkAlbumBtn").addEventListener("click", async () => {
@@ -1136,7 +1243,7 @@ async function init() {
     for (const id of state.selected) {
       await patchRecord(id, { album: album || "" });
     }
-    showToast(album ? "Naar album verplaatst" : "Uit album gehaald");
+    showToast(album ? "Album bijgewerkt" : "Uit album gehaald");
     await reload();
   });
 

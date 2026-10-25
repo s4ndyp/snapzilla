@@ -89,15 +89,18 @@
           </label>
           <span class="badge" id="selectedBadge" hidden>0 geselecteerd</span>
           <div class="toolbar-actions">
-            <button type="button" class="btn btn-ghost btn-sm" id="bulkStarBtn" disabled>
+            <button type="button" class="btn btn-ghost btn-sm bulk-star-on" id="bulkStarBtn" disabled title="Favoriet maken">
               ⭐
             </button>
+            <button type="button" class="btn btn-ghost btn-sm bulk-star-off" id="bulkUnstarBtn" disabled title="Favoriet verwijderen">
+              ☆
+            </button>
             <button type="button" class="btn btn-ghost btn-sm" id="bulkTagBtn" disabled>
-              Tag
+              Tags
             </button>
             <select id="bulkAlbumSelect" class="select select-sm" aria-label="Album" disabled></select>
             <button type="button" class="btn btn-ghost btn-sm" id="bulkAlbumBtn" disabled>
-              Naar album
+              Album wijzigen
             </button>
             <button type="button" class="btn btn-danger btn-sm" id="bulkDeleteBtn" disabled>
               Verwijder
@@ -194,6 +197,23 @@
         <button type="button" class="lightbox-nav next" id="lightboxNext" aria-label="Volgende">›</button>
         <aside class="lightbox-meta" id="lightboxMeta"></aside>
       </div>
+    </dialog>
+
+    <dialog class="modal" id="bulkTagModal">
+      <form method="dialog" class="modal-box" id="bulkTagForm">
+        <h2>Tags wijzigen</h2>
+        <p class="hint" id="bulkTagHint">Selectie</p>
+        <div class="bulk-tag-list" id="bulkTagList" role="group" aria-label="Bestaande tags"></div>
+        <p class="hint bulk-tag-empty" id="bulkTagEmpty" hidden>Geen tags in deze lijst — voeg hieronder een nieuwe toe.</p>
+        <label class="field">
+          <span>Nieuwe tag toevoegen</span>
+          <input type="text" id="bulkTagNew" class="input" placeholder="bijv. bug, ui" maxlength="80" autocomplete="off" />
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="bulkTagCancel">Annuleren</button>
+          <button type="submit" class="btn btn-primary">Toepassen</button>
+        </div>
+      </form>
     </dialog>
 
     <dialog class="modal" id="albumModal">
