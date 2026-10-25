@@ -1153,6 +1153,17 @@ body {
   font-weight: 600;
 }
 
+.edit-stamp-select {
+  max-width: 11rem;
+  font-size: 0.78rem;
+}
+
+.edit-stamp-select.edit-stamp-active {
+  border-color: var(--filter-pink-border);
+  background: var(--filter-pink-bg);
+  color: var(--filter-pink-text);
+}
+
 .edit-color-picker {
   display: flex;
   align-items: center;

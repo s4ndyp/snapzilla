@@ -22,6 +22,7 @@ const state = {
   phashGroups: new Map(),
   lightboxEditing: false,
   editTool: "pen",
+  editStamp: "check",
   editColor: "#6b9fff",
   editDrawing: false,
   editStart: null,
@@ -688,6 +689,21 @@ function updateBulkUi() {
   $("bulkDeleteBtn").disabled = dis;
   $("bulkAlbumBtn").disabled = dis;
   $("bulkAlbumSelect").disabled = dis;
+  syncSelectAllCheckbox();
+}
+
+function syncSelectAllCheckbox() {
+  const box = $("selectAll");
+  if (!box) return;
+  const display = filteredForDuplicates(state.items);
+  if (!display.length) {
+    box.checked = false;
+    box.indeterminate = false;
+    return;
+  }
+  const n = display.filter((i) => state.selected.has(i.id)).length;
+  box.checked = n === display.length;
+  box.indeterminate = n > 0 && n < display.length;
 }
 
 function selectedItems() {
@@ -769,7 +785,7 @@ async function applyBulkTags() {
       if (!tag) continue;
       if (cb.checked) {
         if (!tags.includes(tag)) tags.push(tag);
-      } else {
+      } else if (!cb.indeterminate) {
         tags = tags.filter((t) => t !== tag);
       }
     }
@@ -795,11 +811,102 @@ function stopLightboxEdit() {
   $("lightboxImg").hidden = false;
 }
 
+function normEditRect(from, to) {
+  const x = Math.min(from.x, to.x);
+  const y = Math.min(from.y, to.y);
+  const w = Math.max(8, Math.abs(to.x - from.x));
+  const h = Math.max(8, Math.abs(to.y - from.y));
+  return { x, y, w, h };
+}
+
+function drawStampShape(ctx, rect, kind, color, preview = false) {
+  const { x, y, w, h } = rect;
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = Math.max(2, Math.min(w, h) * 0.08);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  if (preview) {
+    ctx.setLineDash([6, 4]);
+    ctx.strokeStyle = color;
+    ctx.strokeRect(x, y, w, h);
+    ctx.setLineDash([]);
+  }
+  switch (kind) {
+    case "cross":
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.2, y + h * 0.2);
+      ctx.lineTo(x + w * 0.8, y + h * 0.8);
+      ctx.moveTo(x + w * 0.8, y + h * 0.2);
+      ctx.lineTo(x + w * 0.2, y + h * 0.8);
+      ctx.stroke();
+      break;
+    case "check":
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.15, y + h * 0.55);
+      ctx.lineTo(x + w * 0.4, y + h * 0.82);
+      ctx.lineTo(x + w * 0.88, y + h * 0.22);
+      ctx.stroke();
+      break;
+    case "house":
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.5, y + h * 0.12);
+      ctx.lineTo(x + w * 0.88, y + h * 0.42);
+      ctx.lineTo(x + w * 0.88, y + h * 0.88);
+      ctx.lineTo(x + w * 0.12, y + h * 0.88);
+      ctx.lineTo(x + w * 0.12, y + h * 0.42);
+      ctx.closePath();
+      ctx.stroke();
+      ctx.strokeRect(x + w * 0.38, y + h * 0.58, w * 0.24, h * 0.3);
+      break;
+    case "lamp":
+      ctx.beginPath();
+      ctx.ellipse(x + w * 0.5, y + h * 0.36, w * 0.22, h * 0.21, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.5, y + h * 0.57);
+      ctx.lineTo(x + w * 0.5, y + h * 0.72);
+      ctx.moveTo(x + w * 0.32, y + h * 0.78);
+      ctx.lineTo(x + w * 0.68, y + h * 0.78);
+      ctx.stroke();
+      break;
+    case "computer":
+      ctx.strokeRect(x + w * 0.14, y + h * 0.18, w * 0.72, h * 0.52);
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.5, y + h * 0.7);
+      ctx.lineTo(x + w * 0.5, y + h * 0.78);
+      ctx.moveTo(x + w * 0.28, y + h * 0.86);
+      ctx.lineTo(x + w * 0.72, y + h * 0.86);
+      ctx.stroke();
+      break;
+    case "lightning":
+      ctx.beginPath();
+      ctx.moveTo(x + w * 0.55, y + h * 0.08);
+      ctx.lineTo(x + w * 0.28, y + h * 0.52);
+      ctx.lineTo(x + w * 0.48, y + h * 0.52);
+      ctx.lineTo(x + w * 0.38, y + h * 0.92);
+      ctx.lineTo(x + w * 0.72, y + h * 0.42);
+      ctx.lineTo(x + w * 0.5, y + h * 0.42);
+      ctx.closePath();
+      ctx.stroke();
+      break;
+    default:
+      break;
+  }
+  ctx.restore();
+}
+
 function setActiveEditTool(tool) {
   state.editTool = tool;
   document.querySelectorAll("[data-edtool]").forEach((btn) => {
     btn.classList.toggle("edit-tool-btn-active", btn.dataset.edtool === tool);
   });
+  const stampSel = $("editStampSelect");
+  if (stampSel) {
+    stampSel.classList.toggle("edit-stamp-active", tool === "stamp");
+    if (tool !== "stamp") stampSel.value = "";
+  }
 }
 
 async function startLightboxEdit(item) {
@@ -849,7 +956,19 @@ function bindLightboxCanvas(item) {
       ctx.strokeStyle = state.editColor;
     }
     if (state.editTool === "rect") {
-      ctx.strokeRect(from.x, from.y, to.x - from.x, to.y - from.y);
+      const r = normEditRect(from, to);
+      ctx.strokeRect(r.x, r.y, r.w, r.h);
+      return;
+    }
+    if (state.editTool === "circle") {
+      const r = normEditRect(from, to);
+      ctx.beginPath();
+      ctx.ellipse(r.x + r.w / 2, r.y + r.h / 2, r.w / 2, r.h / 2, 0, 0, Math.PI * 2);
+      ctx.stroke();
+      return;
+    }
+    if (state.editTool === "stamp") {
+      drawStampShape(ctx, normEditRect(from, to), state.editStamp, state.editColor, true);
       return;
     }
     if (state.editTool === "arrow") {
@@ -898,7 +1017,12 @@ function bindLightboxCanvas(item) {
     if (!state.lightboxEditing || !state.editDrawing) return;
     const pt = canvasPoint(canvas, e);
     if (state.editTool !== "pen" && state.editTool !== "highlight") {
-      drawShape(state.editStart, pt);
+      if (state.editTool === "stamp") {
+        ctx.putImageData(state.editSnapshot, 0, 0);
+        drawStampShape(ctx, normEditRect(state.editStart, pt), state.editStamp, state.editColor, false);
+      } else {
+        drawShape(state.editStart, pt);
+      }
       state.editSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
     }
     state.editDrawing = false;
@@ -930,6 +1054,13 @@ function bindLightboxCanvas(item) {
 
   document.querySelectorAll("[data-edtool]").forEach((btn) => {
     btn.onclick = () => setActiveEditTool(btn.dataset.edtool);
+  });
+
+  $("editStampSelect")?.addEventListener("change", (e) => {
+    const kind = e.target.value;
+    if (!kind) return;
+    state.editStamp = kind;
+    setActiveEditTool("stamp");
   });
 }
 
@@ -1106,16 +1237,24 @@ async function uploadFiles(files, mode = "upload") {
   await reload();
 }
 
-async function reload(append = false) {
+async function reload(append = false, options = {}) {
+  const preserveSelection = options.preserveSelection !== false;
   try {
     const data = await listRecords(append ? state.page + 1 : 1);
     if (append) {
       state.page++;
       state.items.push(...data.items);
     } else {
+      const previousSelected = preserveSelection ? [...state.selected] : [];
       state.page = data.page;
       state.items = data.items;
       state.selected.clear();
+      if (preserveSelection) {
+        const visible = new Set(state.items.map((i) => i.id));
+        for (const id of previousSelected) {
+          if (visible.has(id)) state.selected.add(id);
+        }
+      }
       updateBulkUi();
     }
     state.totalPages = data.totalPages;

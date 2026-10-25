@@ -8,7 +8,9 @@ enum EditTool
     Pen,
     Highlight,
     Rectangle,
+    Circle,
     Arrow,
+    Stamp,
     Text,
     Crop,
 }
@@ -21,6 +23,7 @@ sealed class ImageEditorControl : UserControl
     Bitmap? _bitmap;
     readonly List<Bitmap> _undo = new();
     EditTool _tool = EditTool.Pen;
+    StampKind _stampKind = StampKind.Check;
     Color _strokeColor = Color.FromArgb(255, 107, 159, 255);
 
     public Color StrokeColor
@@ -40,6 +43,12 @@ sealed class ImageEditorControl : UserControl
     {
         get => _tool;
         set => _tool = value;
+    }
+
+    public StampKind CurrentStamp
+    {
+        get => _stampKind;
+        set => _stampKind = value;
     }
 
     public ImageEditorControl()
@@ -133,21 +142,33 @@ sealed class ImageEditorControl : UserControl
         e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
         e.Graphics.DrawImage(_bitmap, rect);
 
-        if (_dragging && _tool is EditTool.Crop or EditTool.Rectangle or EditTool.Arrow)
+        if (_dragging && _tool is EditTool.Crop or EditTool.Rectangle or EditTool.Circle or EditTool.Arrow or EditTool.Stamp)
         {
             var c1 = ImageToClient(_startImg);
             var c2 = ImageToClient(_endImg);
             var preview = NormalizeRect(c1, c2);
-            using var pen = new Pen(
-                _tool == EditTool.Crop ? Color.Lime : _strokeColor,
-                2)
+            if (_tool == EditTool.Arrow)
             {
-                DashStyle = _tool == EditTool.Crop ? DashStyle.Dash : DashStyle.Solid,
-            };
-            if (_tool == EditTool.Rectangle || _tool == EditTool.Crop)
-                e.Graphics.DrawRectangle(pen, preview);
-            else
+                using var pen = new Pen(_strokeColor, 2);
                 e.Graphics.DrawLine(pen, c1, c2);
+            }
+            else if (_tool == EditTool.Circle)
+            {
+                using var pen = new Pen(_strokeColor, 2);
+                e.Graphics.DrawEllipse(pen, preview);
+            }
+            else if (_tool == EditTool.Stamp)
+            {
+                StampDrawing.Draw(e.Graphics, preview, _stampKind, _strokeColor, previewFrame: true);
+            }
+            else
+            {
+                using var pen = new Pen(_tool == EditTool.Crop ? Color.Lime : _strokeColor, 2)
+                {
+                    DashStyle = _tool == EditTool.Crop ? DashStyle.Dash : DashStyle.Solid,
+                };
+                e.Graphics.DrawRectangle(pen, preview);
+            }
         }
     }
 
@@ -217,7 +238,8 @@ sealed class ImageEditorControl : UserControl
         if (_tool is EditTool.Pen or EditTool.Highlight)
             return;
 
-        if (_startImg == _endImg)
+        var box = NormalizeRect(_startImg, _endImg);
+        if (box.Width < 4 && box.Height < 4)
             return;
 
         PushUndo();
@@ -226,8 +248,14 @@ sealed class ImageEditorControl : UserControl
             case EditTool.Rectangle:
                 DrawRectangleShape(_startImg, _endImg);
                 break;
+            case EditTool.Circle:
+                DrawCircleShape(_startImg, _endImg);
+                break;
             case EditTool.Arrow:
                 DrawArrow(_startImg, _endImg);
+                break;
+            case EditTool.Stamp:
+                DrawStampShape(_startImg, _endImg);
                 break;
         }
 
@@ -276,6 +304,24 @@ sealed class ImageEditorControl : UserControl
         g.SmoothingMode = SmoothingMode.AntiAlias;
         using var pen = new Pen(_strokeColor, 3);
         g.DrawRectangle(pen, NormalizeRect(a, b));
+    }
+
+    void DrawCircleShape(Point a, Point b)
+    {
+        if (_bitmap is null)
+            return;
+        using var g = Graphics.FromImage(_bitmap);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var pen = new Pen(_strokeColor, 3);
+        g.DrawEllipse(pen, NormalizeRect(a, b));
+    }
+
+    void DrawStampShape(Point a, Point b)
+    {
+        if (_bitmap is null)
+            return;
+        using var g = Graphics.FromImage(_bitmap);
+        StampDrawing.Draw(g, NormalizeRect(a, b), _stampKind, _strokeColor);
     }
 
     void DrawArrow(Point a, Point b)

@@ -25,6 +25,8 @@ sealed class CapturePreviewForm : Form
     readonly AutocompleteOverlay _suggestions;
     readonly Dictionary<EditTool, Button> _toolButtons = new();
     readonly List<Button> _colorChips = new();
+    readonly ComboBox _stampCombo;
+    bool _ignoreStampCombo;
 
     public CapturePreviewForm(byte[] png, string captureMode, UploadService upload, AppConfig config)
     {
@@ -45,17 +47,55 @@ sealed class CapturePreviewForm : Form
         var tools = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 44,
+            AutoSize = true,
+            MaximumSize = new Size(1080, 88),
             Padding = new Padding(8, 6, 8, 6),
             BackColor = DarkTheme.BgElevated,
+            WrapContents = true,
         };
 
         AddToolButton(tools, "Pen", EditTool.Pen);
         AddToolButton(tools, "Marker", EditTool.Highlight);
         AddToolButton(tools, "Rechthoek", EditTool.Rectangle);
+        AddToolButton(tools, "Cirkel", EditTool.Circle);
         AddToolButton(tools, "Pijl", EditTool.Arrow);
         AddToolButton(tools, "Tekst", EditTool.Text);
         AddToolButton(tools, "Bijsnijden", EditTool.Crop);
+
+        _stampCombo = new ComboBox
+        {
+            DropDownStyle = ComboBoxStyle.DropDownList,
+            Width = 148,
+            Margin = new Padding(6, 0, 0, 0),
+        };
+        _stampCombo.Items.AddRange(
+        [
+            "Stempel — sleep grootte",
+            "Kruis",
+            "Vink",
+            "Huis",
+            "Lamp",
+            "Computer",
+            "Bliksem",
+        ]);
+        _stampCombo.SelectedIndex = 0;
+        _stampCombo.SelectedIndexChanged += (_, _) =>
+        {
+            if (_ignoreStampCombo || _stampCombo.SelectedIndex <= 0)
+                return;
+            _editor.CurrentStamp = _stampCombo.SelectedIndex switch
+            {
+                1 => StampKind.Cross,
+                2 => StampKind.Check,
+                3 => StampKind.House,
+                4 => StampKind.Lamp,
+                5 => StampKind.Computer,
+                6 => StampKind.Lightning,
+                _ => StampKind.Check,
+            };
+            SelectTool(EditTool.Stamp);
+        };
+        tools.Controls.Add(_stampCombo);
 
         var undoBtn = new Button { Text = "Ongedaan", AutoSize = true, Margin = new Padding(12, 0, 0, 0) };
         DarkTheme.StyleSecondary(undoBtn);
@@ -175,6 +215,16 @@ sealed class CapturePreviewForm : Form
             else
                 DarkTheme.StyleSecondary(btn);
         }
+
+        if (tool != EditTool.Stamp && _stampCombo.SelectedIndex != 0)
+        {
+            _ignoreStampCombo = true;
+            _stampCombo.SelectedIndex = 0;
+            _ignoreStampCombo = false;
+        }
+
+        _stampCombo.BackColor = tool == EditTool.Stamp ? DarkTheme.FilterPinkBg : DarkTheme.BgElevated;
+        _stampCombo.ForeColor = tool == EditTool.Stamp ? DarkTheme.FilterPinkText : DarkTheme.Text;
     }
 
     void SelectColor(Button chip, Color color)
