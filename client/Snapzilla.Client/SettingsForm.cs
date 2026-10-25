@@ -88,6 +88,7 @@ sealed class SettingsForm : Form
         layout.Controls.Add(saveBtn, 1, 6);
 
         Controls.Add(layout);
+        DarkTheme.Apply(this);
     }
 
     async Task TestConnectionAsync(Button testBtn)

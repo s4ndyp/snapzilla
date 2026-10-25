@@ -1,4 +1,5 @@
 using System.Net.Http.Headers;
+using System.Text.Json;
 
 namespace Snapzilla.Client;
 
@@ -13,6 +14,7 @@ sealed class UploadService(AppConfig config)
         byte[] png,
         string captureMode,
         string? title = null,
+        IReadOnlyList<string>? tags = null,
         CancellationToken ct = default)
     {
         var baseUrl = ServerConnection.Normalize(config.ServerUrl);
@@ -29,7 +31,7 @@ sealed class UploadService(AppConfig config)
         content.Add(new StringContent(config.ClientId), "client_id");
         content.Add(new StringContent(config.ClientName), "client_name");
         content.Add(new StringContent(Environment.MachineName), "hostname");
-        content.Add(new StringContent("[]"), "tags");
+        content.Add(new StringContent(JsonSerializer.Serialize(tags ?? [])), "tags");
         content.Add(new StringContent("false"), "starred");
         content.Add(new StringContent("false"), "analyzed");
 

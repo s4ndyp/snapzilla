@@ -29,6 +29,8 @@ sealed class RegionCaptureForm : Form
                 Close();
             }
         };
+
+        BackColor = Color.FromArgb(0, 0, 0);
     }
 
     protected override void OnMouseDown(MouseEventArgs e)

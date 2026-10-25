@@ -1,74 +1,87 @@
-using System.Drawing;
-
 namespace Snapzilla.Client;
 
 sealed class CapturePreviewForm : Form
 {
-    readonly byte[] _png;
     readonly string _captureMode;
     readonly UploadService _upload;
-    readonly PictureBox _picture;
+    readonly ImageEditorControl _editor;
     readonly Label _status;
+    readonly TextBox _tagsBox;
     readonly Button _uploadBtn;
     readonly Button _saveBtn;
 
     public CapturePreviewForm(byte[] png, string captureMode, UploadService upload)
     {
-        _png = png;
         _captureMode = captureMode;
         _upload = upload;
+        _editor = new ImageEditorControl { Dock = DockStyle.Fill };
+        _editor.LoadPng(png);
 
-        Text = "Snapzilla — preview";
+        Text = "Snapzilla — bewerken & opslaan";
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(640, 480);
-        Size = new Size(960, 640);
+        MinimumSize = new Size(800, 560);
+        Size = new Size(1100, 720);
         KeyPreview = true;
+        DarkTheme.Apply(this);
 
-        _picture = new PictureBox
+        var tools = new FlowLayoutPanel
         {
-            Dock = DockStyle.Fill,
-            SizeMode = PictureBoxSizeMode.Zoom,
-            BackColor = Color.FromArgb(24, 28, 36),
+            Dock = DockStyle.Top,
+            Height = 44,
+            Padding = new Padding(8, 6, 8, 6),
+            BackColor = DarkTheme.BgElevated,
         };
-        using (var ms = new MemoryStream(png))
-        {
-            _picture.Image = Image.FromStream(ms);
-        }
+
+        tools.Controls.Add(ToolBtn("Pen", () => _editor.CurrentTool = EditTool.Pen));
+        tools.Controls.Add(ToolBtn("Marker", () => _editor.CurrentTool = EditTool.Highlight));
+        tools.Controls.Add(ToolBtn("Rechthoek", () => _editor.CurrentTool = EditTool.Rectangle));
+        tools.Controls.Add(ToolBtn("Pijl", () => _editor.CurrentTool = EditTool.Arrow));
+        tools.Controls.Add(ToolBtn("Tekst", () => _editor.CurrentTool = EditTool.Text));
+        tools.Controls.Add(ToolBtn("Bijsnijden", () => _editor.CurrentTool = EditTool.Crop));
+        tools.Controls.Add(ToolBtn("Ongedaan", () => _editor.Undo()));
+
+        var bottom = new Panel { Dock = DockStyle.Bottom, Height = 96, Padding = new Padding(8) };
+
+        var tagsLabel = new Label { Text = "Tags (komma-gescheiden)", AutoSize = true, Location = new Point(8, 8) };
+        DarkTheme.StyleLabel(tagsLabel);
+        _tagsBox = new TextBox { Location = new Point(8, 28), Width = 420 };
+        DarkTheme.StyleInput(_tagsBox);
 
         _status = new Label
         {
-            Dock = DockStyle.Top,
-            Height = 28,
-            TextAlign = ContentAlignment.MiddleLeft,
-            Padding = new Padding(8, 0, 8, 0),
-            Text = $"Modus: {captureMode} · {png.Length / 1024} KB",
+            Location = new Point(8, 56),
+            AutoSize = true,
+            Text = $"Modus: {captureMode}",
         };
+        DarkTheme.StyleLabel(_status);
 
         var buttons = new FlowLayoutPanel
         {
-            Dock = DockStyle.Bottom,
-            Height = 48,
             FlowDirection = FlowDirection.RightToLeft,
-            Padding = new Padding(8),
-            WrapContents = false,
+            Dock = DockStyle.Right,
+            Width = 360,
+            Padding = new Padding(0, 20, 0, 0),
         };
 
         var closeBtn = new Button { Text = "Sluiten", AutoSize = true };
+        DarkTheme.StyleSecondary(closeBtn);
         closeBtn.Click += (_, _) => Close();
 
-        _saveBtn = new Button { Text = "Lokaal opslaan", AutoSize = true };
+        _saveBtn = new Button { Text = "Lokaal opslaan", AutoSize = true, Margin = new Padding(8, 0, 0, 0) };
+        DarkTheme.StyleSecondary(_saveBtn);
         _saveBtn.Click += (_, _) => SaveLocally();
 
-        _uploadBtn = new Button { Text = "Upload naar server", AutoSize = true };
+        _uploadBtn = new Button { Text = "Upload naar server", AutoSize = true, Margin = new Padding(8, 0, 0, 0) };
+        DarkTheme.StylePrimary(_uploadBtn);
         _uploadBtn.Click += async (_, _) => await UploadAsync();
 
-        buttons.Controls.Add(closeBtn);
-        buttons.Controls.Add(_saveBtn);
-        buttons.Controls.Add(_uploadBtn);
+        buttons.Controls.AddRange([closeBtn, _saveBtn, _uploadBtn]);
 
-        Controls.Add(_picture);
-        Controls.Add(buttons);
-        Controls.Add(_status);
+        bottom.Controls.AddRange([tagsLabel, _tagsBox, _status, buttons]);
+
+        Controls.Add(_editor);
+        Controls.Add(bottom);
+        Controls.Add(tools);
 
         KeyDown += (_, e) =>
         {
@@ -76,8 +89,25 @@ sealed class CapturePreviewForm : Form
                 Close();
         };
 
-        ClientLog.Info($"Preview geopend ({captureMode}, {_png.Length} bytes)");
+        DarkTheme.Apply(this);
+        DarkTheme.StylePrimary(_uploadBtn);
+
+        ClientLog.Info($"Preview/editor geopend ({captureMode}, {png.Length} bytes)");
     }
+
+    static Button ToolBtn(string text, Action onClick)
+    {
+        var b = new Button { Text = text, AutoSize = true, Margin = new Padding(0, 0, 6, 0) };
+        DarkTheme.StyleSecondary(b);
+        b.Click += (_, _) => onClick();
+        return b;
+    }
+
+    string[] ParseTags() =>
+        _tagsBox.Text
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
 
     async Task UploadAsync()
     {
@@ -85,7 +115,8 @@ sealed class CapturePreviewForm : Form
         _status.Text = "Uploaden…";
         try
         {
-            await _upload.UploadAsync(_png, _captureMode);
+            var png = _editor.ExportPng();
+            await _upload.UploadAsync(png, _captureMode, tags: ParseTags());
             _status.Text = "Upload geslaagd.";
             ClientLog.Info($"Upload geslaagd ({_captureMode})");
             DialogResult = DialogResult.OK;
@@ -93,11 +124,11 @@ sealed class CapturePreviewForm : Form
         }
         catch (Exception ex)
         {
-            _status.Text = "Upload mislukt — zie logboek in instellingen.";
+            _status.Text = "Upload mislukt — zie logboek.";
             ClientLog.Error("Upload mislukt vanuit preview", ex);
             MessageBox.Show(
                 this,
-                $"{ex.Message}{Environment.NewLine}{Environment.NewLine}Details staan in het logboek (Instellingen → Logboek openen).",
+                $"{ex.Message}{Environment.NewLine}{Environment.NewLine}Details staan in het logboek.",
                 "Upload mislukt",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
@@ -125,15 +156,9 @@ sealed class CapturePreviewForm : Form
 
         try
         {
-            File.WriteAllBytes(dlg.FileName, _png);
+            File.WriteAllBytes(dlg.FileName, _editor.ExportPng());
             _status.Text = $"Opgeslagen: {dlg.FileName}";
             ClientLog.Info($"Lokaal opgeslagen: {dlg.FileName}");
-            MessageBox.Show(
-                this,
-                dlg.FileName,
-                "Opgeslagen",
-                MessageBoxButtons.OK,
-                MessageBoxIcon.Information);
         }
         catch (Exception ex)
         {
@@ -147,11 +172,5 @@ sealed class CapturePreviewForm : Form
         _uploadBtn.Enabled = !busy;
         _saveBtn.Enabled = !busy;
         UseWaitCursor = busy;
-    }
-
-    protected override void OnFormClosed(FormClosedEventArgs e)
-    {
-        _picture.Image?.Dispose();
-        base.OnFormClosed(e);
     }
 }
