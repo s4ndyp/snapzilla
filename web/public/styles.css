@@ -12,6 +12,9 @@
   --danger-dim: rgba(232, 93, 106, 0.12);
   --success: #4ade80;
   --warning: #fbbf24;
+  --filter-pink-bg: rgba(236, 72, 153, 0.28);
+  --filter-pink-border: rgba(244, 114, 182, 0.55);
+  --filter-pink-text: #ffd6ec;
   --radius: 12px;
   --font: "DM Sans", system-ui, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, monospace;
@@ -232,20 +235,41 @@ body {
 .filter-btn {
   width: 100%;
   text-align: left;
-  padding: 0.4rem 0.5rem;
+  padding: 0.4rem 0.55rem;
   font: inherit;
   font-size: 0.85rem;
   color: var(--text-muted);
   background: transparent;
-  border: none;
-  border-radius: 6px;
+  border: 1px solid transparent;
+  border-radius: 8px;
   cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
-.filter-btn:hover,
-.filter-btn-active {
+.filter-btn:hover {
   background: var(--bg-hover);
   color: var(--text);
+}
+
+.client-list .filter-btn-active {
+  background: var(--bg-hover);
+  color: var(--text);
+  border-color: var(--border);
+}
+
+.tag-list .filter-btn:hover,
+.album-list .filter-btn:hover {
+  background: rgba(236, 72, 153, 0.12);
+  color: var(--filter-pink-text);
+}
+
+.tag-list .filter-btn-active,
+.album-list .filter-btn-active {
+  background: var(--filter-pink-bg);
+  color: var(--filter-pink-text);
+  border-color: var(--filter-pink-border);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 .hint {
