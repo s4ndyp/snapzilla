@@ -13,6 +13,8 @@ const state = {
   albumId: null,
   search: "",
   dayFilter: null,
+  monthFilter: null,
+  calendarMonth: "",
   activityByDay: [],
   sort: "-captured_at",
   selected: new Set(),
@@ -174,12 +176,18 @@ function buildFilter(opts = {}) {
   if (state.albumId) {
     parts.push(`album = "${state.albumId}"`);
   }
-  if (state.dayFilter && !opts.skipDayFilter) {
-    const d = state.dayFilter;
-    const start = `${d} 00:00:00.000Z`;
-    const end = `${d} 23:59:59.999Z`;
-    // PocketBase: UTC datums met spatie (geen T), enkel quotes; geen `date = ""` (400).
-    parts.push(`captured_at >= '${start}' && captured_at <= '${end}'`);
+  if (!opts.skipDateFilter) {
+    if (state.dayFilter) {
+      const d = state.dayFilter;
+      const start = `${d} 00:00:00.000Z`;
+      const end = `${d} 23:59:59.999Z`;
+      parts.push(`captured_at >= '${start}' && captured_at <= '${end}'`);
+    } else if (state.monthFilter) {
+      const range = monthRangeUtc(state.monthFilter);
+      if (range) {
+        parts.push(`captured_at >= '${range.start}' && captured_at <= '${range.end}'`);
+      }
+    }
   }
   if (state.search.trim()) {
     const q = state.search.trim().replace(/"/g, '\\"');
@@ -206,40 +214,87 @@ function formatDayLong(isoDay) {
   return d.toLocaleDateString("nl-NL", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
 }
 
+function formatMonthLong(ym) {
+  if (!ym) return "—";
+  const [y, m] = ym.split("-").map(Number);
+  const d = new Date(Date.UTC(y, m - 1, 1));
+  return d.toLocaleDateString("nl-NL", { month: "long", year: "numeric" });
+}
+
+function currentYearMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthRangeUtc(ym) {
+  const [yS, mS] = ym.split("-");
+  const y = Number(yS);
+  const m = Number(mS);
+  if (!y || !m) return null;
+  const last = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const mm = String(m).padStart(2, "0");
+  return {
+    start: `${y}-${mm}-01 00:00:00.000Z`,
+    end: `${y}-${mm}-${String(last).padStart(2, "0")} 23:59:59.999Z`,
+  };
+}
+
+function shiftCalendarMonth(ym, delta) {
+  const [yS, mS] = ym.split("-").map(Number);
+  const d = new Date(Date.UTC(yS, mS - 1 + delta, 1));
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+function activityCountMap() {
+  const map = new Map();
+  for (const [day, count] of state.activityByDay) map.set(day, count);
+  return map;
+}
+
 async function loadActivityByDay() {
   try {
-    const filter = buildFilter({ skipDayFilter: true });
-    const params = new URLSearchParams({
-      page: "1",
-      perPage: "500",
-      sort: "-captured_at",
-      fields: "captured_at,created",
-    });
-    if (filter) params.set("filter", filter);
-
-    const res = await fetch(`${API}/collections/${COLLECTION}/records?${params}`);
-    if (!res.ok) throw new Error(await res.text());
-    const data = await res.json();
+    const filter = buildFilter({ skipDateFilter: true });
     const byDay = new Map();
-    for (const item of data.items) {
-      const d = dayKeyOf(item);
-      if (!d) continue;
-      byDay.set(d, (byDay.get(d) || 0) + 1);
+    for (let page = 1; page <= 4; page++) {
+      const params = new URLSearchParams({
+        page: String(page),
+        perPage: "200",
+        sort: "-captured_at",
+        fields: "captured_at,created",
+      });
+      if (filter) params.set("filter", filter);
+
+      const res = await fetch(`${API}/collections/${COLLECTION}/records?${params}`);
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      for (const item of data.items) {
+        const d = dayKeyOf(item);
+        if (!d) continue;
+        byDay.set(d, (byDay.get(d) || 0) + 1);
+      }
+      if (data.items.length < 200) break;
     }
-    state.activityByDay = [...byDay.entries()]
-      .sort((a, b) => a[0].localeCompare(b[0]))
-      .slice(-30);
+    state.activityByDay = [...byDay.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   } catch {
     state.activityByDay = [];
   }
 }
 
-function updateDayFilterUi() {
-  const btn = $("clearDayFilter");
+function updateDateFilterUi() {
+  const btn = $("clearDateFilter");
+  const monthBtn = $("calMonthBtn");
+  if (monthBtn) {
+    monthBtn.textContent = formatMonthLong(state.calendarMonth);
+    monthBtn.classList.toggle("calendar-month-active", state.monthFilter === state.calendarMonth);
+    monthBtn.setAttribute("aria-pressed", state.monthFilter === state.calendarMonth ? "true" : "false");
+  }
   if (!btn) return;
   if (state.dayFilter) {
     btn.hidden = false;
-    btn.textContent = `${formatDayLong(state.dayFilter)} — filter wissen ×`;
+    btn.textContent = `${formatDayLong(state.dayFilter)} — wissen ×`;
+  } else if (state.monthFilter) {
+    btn.hidden = false;
+    btn.textContent = `${formatMonthLong(state.monthFilter)} — wissen ×`;
   } else {
     btn.hidden = true;
   }
@@ -380,53 +435,54 @@ function aggregateClients(items) {
   return [...map.values()].sort((a, b) => b.count - a.count);
 }
 
-function renderTimeline() {
-  const el = $("timeline");
-  const days = state.activityByDay;
-  const max = Math.max(1, ...days.map(([, c]) => c));
-  el.innerHTML = "";
-  updateDayFilterUi();
+function renderCalendar() {
+  const grid = $("calendarGrid");
+  if (!grid) return;
+  grid.innerHTML = "";
+  updateDateFilterUi();
 
-  if (!days.length) {
-    el.innerHTML =
-      '<p class="timeline-empty">Nog geen activiteit in deze selectie. Upload screenshots of pas filters in de zijbalk aan.</p>';
-    return;
+  const ym = state.calendarMonth || currentYearMonth();
+  const [yS, mS] = ym.split("-").map(Number);
+  const firstDow = (new Date(Date.UTC(yS, mS - 1, 1)).getUTCDay() + 6) % 7;
+  const daysInMonth = new Date(Date.UTC(yS, mS, 0)).getUTCDate();
+  const counts = activityCountMap();
+
+  for (let i = 0; i < firstDow; i++) {
+    const pad = document.createElement("span");
+    pad.className = "cal-day cal-day-pad";
+    pad.setAttribute("aria-hidden", "true");
+    grid.appendChild(pad);
   }
 
-  for (const [day, count] of days) {
-    const wrap = document.createElement("div");
-    wrap.className = "timeline-day";
-    wrap.setAttribute("role", "listitem");
-
-    const active = state.dayFilter === day;
-    const bar = document.createElement("button");
-    bar.type = "button";
-    bar.className = `timeline-bar${active ? " timeline-bar-active" : ""}`;
-    bar.style.height = `${Math.max(8, (count / max) * 48)}px`;
-    bar.title = `${formatDayLong(day)} — ${count} screenshot${count === 1 ? "" : "s"}`;
-    bar.setAttribute(
+  for (let day = 1; day <= daysInMonth; day++) {
+    const iso = `${yS}-${String(mS).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    const count = counts.get(iso) || 0;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cal-day";
+    btn.dataset.day = iso;
+    if (state.dayFilter === iso) btn.classList.add("cal-day-active");
+    else if (state.monthFilter === ym) btn.classList.add("cal-day-month");
+    if (count > 0) btn.classList.add("cal-day-has-shots");
+    btn.setAttribute("role", "gridcell");
+    btn.setAttribute(
       "aria-label",
-      `${formatDayLong(day)}, ${count} screenshot${count === 1 ? "" : "s"}${active ? ", filter actief" : ""}`,
+      `${formatDayLong(iso)}${count ? `, ${count} screenshot${count === 1 ? "" : "s"}` : ", geen shots"}`,
     );
-    bar.setAttribute("aria-pressed", active ? "true" : "false");
-    bar.addEventListener("click", () => {
-      state.dayFilter = state.dayFilter === day ? null : day;
+    btn.innerHTML = `<span class="cal-day-num">${day}</span>${count ? `<span class="cal-day-dot" aria-hidden="true">${count}</span>` : ""}`;
+    btn.addEventListener("click", () => {
+      state.monthFilter = null;
+      state.dayFilter = state.dayFilter === iso ? null : iso;
       reload();
     });
-
-    const label = document.createElement("span");
-    label.className = `timeline-day-label${active ? " timeline-day-label-active" : ""}`;
-    label.textContent = formatDayShort(day);
-
-    const countEl = document.createElement("span");
-    countEl.className = "timeline-day-count";
-    countEl.textContent = String(count);
-
-    wrap.appendChild(bar);
-    wrap.appendChild(label);
-    wrap.appendChild(countEl);
-    el.appendChild(wrap);
+    grid.appendChild(btn);
   }
+}
+
+function ensureCalendarMonthVisible() {
+  if (state.dayFilter) state.calendarMonth = state.dayFilter.slice(0, 7);
+  else if (state.monthFilter) state.calendarMonth = state.monthFilter;
+  else if (!state.calendarMonth) state.calendarMonth = currentYearMonth();
 }
 
 function albumNameOf(item) {
@@ -537,7 +593,9 @@ function renderGallery() {
   const emptyEl = $("galleryEmpty");
   emptyEl.hidden = display.length > 0;
   if (!display.length && state.dayFilter) {
-    emptyEl.textContent = `Geen screenshots op ${formatDayLong(state.dayFilter)}. Klik op “filter wissen” bij Activiteit per dag.`;
+    emptyEl.textContent = `Geen screenshots op ${formatDayLong(state.dayFilter)}. Klik op “filter wissen” in de kalender.`;
+  } else if (!display.length && state.monthFilter) {
+    emptyEl.textContent = `Geen screenshots in ${formatMonthLong(state.monthFilter)}. Wis het filter in de kalender.`;
   } else if (!display.length) {
     emptyEl.textContent =
       "Nog geen screenshots. Installeer de Windows-client of upload hier.";
@@ -964,8 +1022,9 @@ async function reload(append = false) {
     state.totalPages = data.totalPages;
     computePhashGroups(state.items);
     await loadActivityByDay();
+    ensureCalendarMonthVisible();
     renderStats();
-    renderTimeline();
+    renderCalendar();
     renderSidebarLists();
     renderGallery();
   } catch (err) {
@@ -974,6 +1033,7 @@ async function reload(append = false) {
 }
 
 async function init() {
+  state.calendarMonth = currentYearMonth();
   try {
     const alb = await listAlbums();
     state.albums = alb.items || [];
@@ -1006,8 +1066,26 @@ async function init() {
 
   $("refreshBtn").addEventListener("click", () => reload());
 
-  $("clearDayFilter")?.addEventListener("click", () => {
+  $("clearDateFilter")?.addEventListener("click", () => {
     state.dayFilter = null;
+    state.monthFilter = null;
+    reload();
+  });
+
+  $("calPrev")?.addEventListener("click", () => {
+    state.calendarMonth = shiftCalendarMonth(state.calendarMonth || currentYearMonth(), -1);
+    renderCalendar();
+  });
+
+  $("calNext")?.addEventListener("click", () => {
+    state.calendarMonth = shiftCalendarMonth(state.calendarMonth || currentYearMonth(), 1);
+    renderCalendar();
+  });
+
+  $("calMonthBtn")?.addEventListener("click", () => {
+    const ym = state.calendarMonth || currentYearMonth();
+    state.dayFilter = null;
+    state.monthFilter = state.monthFilter === ym ? null : ym;
     reload();
   });
 
