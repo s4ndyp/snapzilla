@@ -1,4 +1,5 @@
 using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 
 namespace Snapzilla.Client;
 
@@ -14,8 +15,11 @@ enum EditTool
 
 sealed class ImageEditorControl : UserControl
 {
+    const int MaxUndoSteps = 8;
+    const int MaxEditPixels = 16_000_000;
+
     Bitmap? _bitmap;
-    readonly Stack<Bitmap> _undo = new();
+    readonly List<Bitmap> _undo = new();
     EditTool _tool = EditTool.Pen;
     readonly Color _color = Color.FromArgb(255, 107, 159, 255);
     bool _dragging;
@@ -37,14 +41,37 @@ sealed class ImageEditorControl : UserControl
 
     public void LoadPng(byte[] png)
     {
+        ClearUndo();
         _bitmap?.Dispose();
-        foreach (var b in _undo)
-            b.Dispose();
-        _undo.Clear();
 
         using var ms = new MemoryStream(png);
-        _bitmap = new Bitmap(ms);
+        using var loaded = new Bitmap(ms);
+        _bitmap = NormalizeForEditing(loaded);
         Invalidate();
+    }
+
+    static Bitmap NormalizeForEditing(Bitmap source)
+    {
+        var pixels = (long)source.Width * source.Height;
+        if (pixels > MaxEditPixels)
+        {
+            var scale = Math.Sqrt(MaxEditPixels / (double)pixels);
+            var w = Math.Max(1, (int)(source.Width * scale));
+            var h = Math.Max(1, (int)(source.Height * scale));
+            var scaled = new Bitmap(w, h, PixelFormat.Format32bppArgb);
+            using (var g = Graphics.FromImage(scaled))
+            {
+                g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                g.DrawImage(source, 0, 0, w, h);
+            }
+
+            return scaled;
+        }
+
+        var bmp = new Bitmap(source.Width, source.Height, PixelFormat.Format32bppArgb);
+        using (var g = Graphics.FromImage(bmp))
+            g.DrawImage(source, 0, 0);
+        return bmp;
     }
 
     public byte[] ExportPng()
@@ -52,7 +79,7 @@ sealed class ImageEditorControl : UserControl
         if (_bitmap is null)
             return [];
         using var ms = new MemoryStream();
-        _bitmap.Save(ms, System.Drawing.Imaging.ImageFormat.Png);
+        _bitmap.Save(ms, ImageFormat.Png);
         return ms.ToArray();
     }
 
@@ -61,7 +88,8 @@ sealed class ImageEditorControl : UserControl
         if (_undo.Count == 0 || _bitmap is null)
             return;
         _bitmap.Dispose();
-        _bitmap = _undo.Pop();
+        _bitmap = _undo[^1];
+        _undo.RemoveAt(_undo.Count - 1);
         Invalidate();
     }
 
@@ -69,13 +97,19 @@ sealed class ImageEditorControl : UserControl
     {
         if (_bitmap is null)
             return;
-        _undo.Push((Bitmap)_bitmap.Clone());
-        while (_undo.Count > 20)
+        _undo.Add((Bitmap)_bitmap.Clone());
+        while (_undo.Count > MaxUndoSteps)
         {
-            var old = _undo.Last();
-            _undo.Pop();
-            old.Dispose();
+            _undo[0].Dispose();
+            _undo.RemoveAt(0);
         }
+    }
+
+    void ClearUndo()
+    {
+        foreach (var b in _undo)
+            b.Dispose();
+        _undo.Clear();
     }
 
     protected override void OnPaint(PaintEventArgs e)
@@ -89,13 +123,21 @@ sealed class ImageEditorControl : UserControl
         e.Graphics.InterpolationMode = InterpolationMode.HighQualityBicubic;
         e.Graphics.DrawImage(_bitmap, rect);
 
-        if (_dragging && _tool == EditTool.Crop)
+        if (_dragging && _tool is EditTool.Crop or EditTool.Rectangle or EditTool.Arrow)
         {
             var c1 = ImageToClient(_startImg);
             var c2 = ImageToClient(_endImg);
-            var crop = NormalizeRect(c1, c2);
-            using var pen = new Pen(Color.Lime, 2) { DashStyle = DashStyle.Dash };
-            e.Graphics.DrawRectangle(pen, crop);
+            var preview = NormalizeRect(c1, c2);
+            using var pen = new Pen(
+                _tool == EditTool.Crop ? Color.Lime : _color,
+                2)
+            {
+                DashStyle = _tool == EditTool.Crop ? DashStyle.Dash : DashStyle.Solid,
+            };
+            if (_tool == EditTool.Rectangle || _tool == EditTool.Crop)
+                e.Graphics.DrawRectangle(pen, preview);
+            else
+                e.Graphics.DrawLine(pen, c1, c2);
         }
     }
 
@@ -123,6 +165,9 @@ sealed class ImageEditorControl : UserControl
 
         _dragging = true;
         _startImg = _endImg = imgPt;
+
+        if (_tool is EditTool.Pen or EditTool.Highlight)
+            PushUndo();
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -134,7 +179,6 @@ sealed class ImageEditorControl : UserControl
         _endImg = ClientToImage(e.Location);
         if (_tool is EditTool.Pen or EditTool.Highlight)
         {
-            PushUndo();
             DrawStroke(_startImg, _endImg, _tool);
             _startImg = _endImg;
             Invalidate();
@@ -159,6 +203,9 @@ sealed class ImageEditorControl : UserControl
             ApplyCrop();
             return;
         }
+
+        if (_tool is EditTool.Pen or EditTool.Highlight)
+            return;
 
         if (_startImg == _endImg)
             return;
@@ -195,7 +242,7 @@ sealed class ImageEditorControl : UserControl
 
     void DrawStroke(Point a, Point b, EditTool tool)
     {
-        if (_bitmap is null)
+        if (_bitmap is null || a == b)
             return;
         using var g = Graphics.FromImage(_bitmap);
         g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -266,8 +313,8 @@ sealed class ImageEditorControl : UserControl
             return Rectangle.Empty;
 
         const int pad = 8;
-        var maxW = Width - pad * 2;
-        var maxH = Height - pad * 2;
+        var maxW = Math.Max(1, Width - pad * 2);
+        var maxH = Math.Max(1, Height - pad * 2);
         var ratio = Math.Min(maxW / (float)_bitmap.Width, maxH / (float)_bitmap.Height);
         var w = (int)(_bitmap.Width * ratio);
         var h = (int)(_bitmap.Height * ratio);
@@ -302,9 +349,7 @@ sealed class ImageEditorControl : UserControl
         if (disposing)
         {
             _bitmap?.Dispose();
-            foreach (var b in _undo)
-                b.Dispose();
-            _undo.Clear();
+            ClearUndo();
         }
 
         base.Dispose(disposing);
