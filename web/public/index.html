@@ -170,11 +170,24 @@
         <button type="button" class="lightbox-nav prev" id="lightboxPrev" aria-label="Vorige">‹</button>
         <figure class="lightbox-figure">
           <div class="lightbox-edit-tools" id="lightboxEditTools">
-            <button type="button" class="edit-tool-btn edit-tool-btn-active" data-edtool="pen">Pen</button>
-            <button type="button" class="edit-tool-btn" data-edtool="highlight">Marker</button>
-            <button type="button" class="edit-tool-btn" data-edtool="rect">Rechthoek</button>
-            <button type="button" class="edit-tool-btn" data-edtool="circle">Cirkel</button>
-            <button type="button" class="edit-tool-btn" data-edtool="arrow">Pijl</button>
+            <button type="button" class="edit-tool-btn edit-icon-btn edit-tool-btn-active" data-edtool="pen" title="Pen" aria-label="Pen">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 20l4-1 9-9-3-3-9 9-1 4zM14 4l3 3"/></svg>
+            </button>
+            <button type="button" class="edit-tool-btn edit-icon-btn" data-edtool="highlight" title="Marker" aria-label="Marker">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" opacity="0.35" d="M5 20h14v2H5z"/><path fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" d="M6 18l8-14 4 4-8 14H6z"/></svg>
+            </button>
+            <button type="button" class="edit-tool-btn edit-icon-btn" data-edtool="rect" title="Rechthoek" aria-label="Rechthoek">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><rect fill="none" stroke="currentColor" stroke-width="2" x="5" y="7" width="14" height="12" rx="1"/></svg>
+            </button>
+            <button type="button" class="edit-tool-btn edit-icon-btn" data-edtool="circle" title="Cirkel" aria-label="Cirkel">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle fill="none" stroke="currentColor" stroke-width="2" cx="12" cy="12" r="8"/></svg>
+            </button>
+            <button type="button" class="edit-tool-btn edit-icon-btn" data-edtool="arrow" title="Pijl" aria-label="Pijl">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M5 19L19 5M19 5h-8M19 5v8"/></svg>
+            </button>
+            <button type="button" class="edit-tool-btn edit-icon-btn" data-edtool="chain" title="Lijnketting — volgende lijn start aan einde; Esc stopt" aria-label="Lijnketting">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M4 18l4-4 4 4 4-8 4 4"/></svg>
+            </button>
             <span class="edit-tools-divider" aria-hidden="true"></span>
             <div class="edit-stamp-row" role="group" aria-label="Stempels — sleep diagonaal voor grootte">
               <button type="button" class="stamp-btn" data-stamp="cross" title="Kruis">
@@ -206,6 +219,9 @@
               <button type="button" class="color-chip" data-color="#ffffff" style="--chip:#ffffff" title="Wit"></button>
             </div>
             <span class="edit-tools-divider" aria-hidden="true"></span>
+            <button type="button" class="btn btn-ghost btn-sm edit-icon-action" id="lbUndoEdit" title="Ongedaan" aria-label="Ongedaan" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 7H5v4M5 11c1.5-3 4.5-5 8-5a7 7 0 1 1-7 7"/></svg>
+            </button>
             <button type="button" class="btn btn-ghost btn-sm" id="lbSaveEdit">Opslaan</button>
             <button type="button" class="btn btn-ghost btn-sm" id="lbResetEdit">Herstel</button>
           </div>

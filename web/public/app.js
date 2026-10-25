@@ -27,7 +27,11 @@ const state = {
   editDrawing: false,
   editStart: null,
   editSnapshot: null,
+  editUndoStack: [],
+  editChainAnchor: null,
 };
+
+const MAX_EDIT_UNDO = 8;
 
 const $ = (id) => document.getElementById(id);
 
@@ -807,8 +811,30 @@ async function applyBulkTags() {
 function stopLightboxEdit() {
   state.lightboxEditing = false;
   state.editDrawing = false;
+  state.editUndoStack = [];
+  state.editChainAnchor = null;
   $("lightboxCanvas").hidden = true;
   $("lightboxImg").hidden = false;
+}
+
+function pushEditUndo(ctx, canvas) {
+  state.editUndoStack.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+  if (state.editUndoStack.length > MAX_EDIT_UNDO) state.editUndoStack.shift();
+  updateEditUndoButton();
+}
+
+function undoLightboxEdit(ctx, canvas) {
+  if (!state.editUndoStack.length) return;
+  const prev = state.editUndoStack.pop();
+  ctx.putImageData(prev, 0, 0);
+  state.editSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  state.editChainAnchor = null;
+  updateEditUndoButton();
+}
+
+function updateEditUndoButton() {
+  const btn = $("lbUndoEdit");
+  if (btn) btn.disabled = !state.editUndoStack.length;
 }
 
 function normEditRect(from, to) {
@@ -899,6 +925,7 @@ function drawStampShape(ctx, rect, kind, color, preview = false) {
 
 function setActiveEditTool(tool) {
   state.editTool = tool;
+  if (tool !== "chain") state.editChainAnchor = null;
   document.querySelectorAll("[data-edtool]").forEach((btn) => {
     btn.classList.toggle("edit-tool-btn-active", btn.dataset.edtool === tool);
   });
@@ -925,6 +952,9 @@ async function startLightboxEdit(item) {
   const ctx = canvas.getContext("2d");
   ctx.drawImage(img, 0, 0);
   state.editSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  state.editUndoStack = [];
+  state.editChainAnchor = null;
+  updateEditUndoButton();
 
   state.lightboxEditing = true;
   img.hidden = true;
@@ -971,19 +1001,21 @@ function bindLightboxCanvas(item) {
       drawStampShape(ctx, normEditRect(from, to), state.editStamp, state.editColor, true);
       return;
     }
-    if (state.editTool === "arrow") {
+    if (state.editTool === "arrow" || state.editTool === "chain") {
       ctx.beginPath();
       ctx.moveTo(from.x, from.y);
       ctx.lineTo(to.x, to.y);
       ctx.stroke();
-      const angle = Math.atan2(to.y - from.y, to.x - from.x);
-      const head = 14;
-      ctx.beginPath();
-      ctx.moveTo(to.x, to.y);
-      ctx.lineTo(to.x - head * Math.cos(angle - Math.PI / 6), to.y - head * Math.sin(angle - Math.PI / 6));
-      ctx.moveTo(to.x, to.y);
-      ctx.lineTo(to.x - head * Math.cos(angle + Math.PI / 6), to.y - head * Math.sin(angle + Math.PI / 6));
-      ctx.stroke();
+      if (state.editTool === "arrow") {
+        const angle = Math.atan2(to.y - from.y, to.x - from.x);
+        const head = 14;
+        ctx.beginPath();
+        ctx.moveTo(to.x, to.y);
+        ctx.lineTo(to.x - head * Math.cos(angle - Math.PI / 6), to.y - head * Math.sin(angle - Math.PI / 6));
+        ctx.moveTo(to.x, to.y);
+        ctx.lineTo(to.x - head * Math.cos(angle + Math.PI / 6), to.y - head * Math.sin(angle + Math.PI / 6));
+        ctx.stroke();
+      }
       return;
     }
     ctx.beginPath();
@@ -995,9 +1027,14 @@ function bindLightboxCanvas(item) {
   canvas.onmousedown = (e) => {
     if (!state.lightboxEditing) return;
     state.editDrawing = true;
-    state.editStart = canvasPoint(canvas, e);
+    const pt = canvasPoint(canvas, e);
+    if (state.editTool === "chain" && state.editChainAnchor) {
+      state.editStart = { ...state.editChainAnchor };
+    } else {
+      state.editStart = pt;
+    }
     if (state.editTool === "pen" || state.editTool === "highlight") {
-      state.editSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      pushEditUndo(ctx, canvas);
     }
   };
 
@@ -1017,16 +1054,31 @@ function bindLightboxCanvas(item) {
     if (!state.lightboxEditing || !state.editDrawing) return;
     const pt = canvasPoint(canvas, e);
     if (state.editTool !== "pen" && state.editTool !== "highlight") {
+      pushEditUndo(ctx, canvas);
+      ctx.putImageData(state.editSnapshot, 0, 0);
       if (state.editTool === "stamp") {
-        ctx.putImageData(state.editSnapshot, 0, 0);
         drawStampShape(ctx, normEditRect(state.editStart, pt), state.editStamp, state.editColor, false);
       } else {
         drawShape(state.editStart, pt);
       }
       state.editSnapshot = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      if (state.editTool === "chain") {
+        state.editChainAnchor = { x: pt.x, y: pt.y };
+      }
     }
     state.editDrawing = false;
   };
+
+  canvas.onkeydown = (e) => {
+    if (!state.lightboxEditing) return;
+    if (e.key === "Escape" && state.editTool === "chain") {
+      state.editChainAnchor = null;
+      state.editDrawing = false;
+      e.preventDefault();
+      showToast("Lijnketting beëindigd");
+    }
+  };
+  canvas.tabIndex = 0;
 
   $("lbSaveEdit").onclick = async () => {
     const blob = await new Promise((res) => canvas.toBlob(res, "image/png"));
@@ -1051,6 +1103,8 @@ function bindLightboxCanvas(item) {
       showToast(err.message, true);
     }
   };
+
+  $("lbUndoEdit").onclick = () => undoLightboxEdit(ctx, canvas);
 
   document.querySelectorAll("[data-edtool]").forEach((btn) => {
     btn.onclick = () => setActiveEditTool(btn.dataset.edtool);
