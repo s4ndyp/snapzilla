@@ -21,7 +21,7 @@ sealed class ServerCatalogService(AppConfig config)
         ClientLog.Info($"Catalogus: {albums.Count} albums, {tags.Count} tags");
     }
 
-    static async Task<IReadOnlyList<AlbumEntry>> FetchAlbumsAsync(string baseUrl, CancellationToken ct)
+    async Task<IReadOnlyList<AlbumEntry>> FetchAlbumsAsync(string baseUrl, CancellationToken ct)
     {
         var url =
             $"{baseUrl}/api/collections/albums/records?perPage=500&sort=name&fields=id,name";
@@ -47,7 +47,7 @@ sealed class ServerCatalogService(AppConfig config)
         return list;
     }
 
-    static async Task<IReadOnlyList<string>> FetchTagsAsync(string baseUrl, CancellationToken ct)
+    async Task<IReadOnlyList<string>> FetchTagsAsync(string baseUrl, CancellationToken ct)
     {
         var tagSet = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (var page = 1; page <= 4; page++)
@@ -83,40 +83,39 @@ sealed class ServerCatalogService(AppConfig config)
     static IEnumerable<string> ParseTagsElement(JsonElement el)
     {
         if (el.ValueKind == JsonValueKind.Array)
-        {
-            foreach (var x in el.EnumerateArray())
-            {
-                var s = x.GetString()?.Trim();
-                if (!string.IsNullOrEmpty(s))
-                    yield return s;
-            }
+            return ParseTagsFromArray(el);
 
-            yield break;
+        if (el.ValueKind != JsonValueKind.String)
+            return [];
+
+        var raw = el.GetString();
+        if (string.IsNullOrWhiteSpace(raw))
+            return [];
+
+        try
+        {
+            using var inner = JsonDocument.Parse(raw);
+            return inner.RootElement.ValueKind == JsonValueKind.Array
+                ? ParseTagsFromArray(inner.RootElement)
+                : [];
+        }
+        catch
+        {
+            return [];
+        }
+    }
+
+    static List<string> ParseTagsFromArray(JsonElement array)
+    {
+        var list = new List<string>();
+        foreach (var x in array.EnumerateArray())
+        {
+            var s = x.GetString()?.Trim();
+            if (!string.IsNullOrEmpty(s))
+                list.Add(s);
         }
 
-        if (el.ValueKind == JsonValueKind.String)
-        {
-            var raw = el.GetString();
-            if (string.IsNullOrWhiteSpace(raw))
-                yield break;
-            try
-            {
-                using var inner = JsonDocument.Parse(raw);
-                if (inner.RootElement.ValueKind == JsonValueKind.Array)
-                {
-                    foreach (var x in inner.RootElement.EnumerateArray())
-                    {
-                        var s = x.GetString()?.Trim();
-                        if (!string.IsNullOrEmpty(s))
-                            yield return s;
-                    }
-                }
-            }
-            catch
-            {
-                // ignore malformed tag JSON
-            }
-        }
+        return list;
     }
 
     public string? ResolveAlbumId(string? nameOrEmpty)
