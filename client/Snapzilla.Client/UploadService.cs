@@ -6,25 +6,8 @@ sealed class UploadService(AppConfig config)
 {
     readonly HttpClient _http = new() { Timeout = TimeSpan.FromMinutes(2) };
 
-    public async Task<bool> TestConnectionAsync(CancellationToken ct = default)
-    {
-        var baseUrl = config.ServerUrl.TrimEnd('/');
-        var url = $"{baseUrl}/api/health";
-        ClientLog.Info($"Verbinding testen: GET {url}");
-        using var res = await _http.GetAsync(url, ct);
-        var body = await res.Content.ReadAsStringAsync(ct);
-        if (!res.IsSuccessStatusCode)
-        {
-            ClientLog.Error($"Health check mislukt ({(int)res.StatusCode}): {body}");
-            return false;
-        }
-
-        var snippet = body.Trim();
-        if (snippet.Length > 120)
-            snippet = snippet[..120] + "…";
-        ClientLog.Info($"Health check OK: {snippet}");
-        return true;
-    }
+    public Task<ConnectionTestResult> TestConnectionAsync(CancellationToken ct = default) =>
+        ServerConnection.TestAndDiscoverAsync(_http, config.ServerUrl, ct);
 
     public async Task UploadAsync(
         byte[] png,
@@ -32,7 +15,7 @@ sealed class UploadService(AppConfig config)
         string? title = null,
         CancellationToken ct = default)
     {
-        var baseUrl = config.ServerUrl.TrimEnd('/');
+        var baseUrl = ServerConnection.Normalize(config.ServerUrl);
         var url = $"{baseUrl}/api/collections/screenshots/records";
         ClientLog.Info($"Upload start: POST {url} ({png.Length} bytes, mode={captureMode})");
 
@@ -57,7 +40,7 @@ sealed class UploadService(AppConfig config)
             ClientLog.Error(
                 $"Upload HTTP {(int)res.StatusCode} {res.ReasonPhrase}{Environment.NewLine}Response: {body}");
             throw new InvalidOperationException(
-                $"Upload mislukt ({(int)res.StatusCode}). Controleer de server-URL (poort 80 = geen :3000).{Environment.NewLine}{TrimBody(body)}");
+                $"Upload mislukt ({(int)res.StatusCode}).{Environment.NewLine}{TrimBody(body)}");
         }
 
         ClientLog.Info($"Upload OK ({(int)res.StatusCode})");
