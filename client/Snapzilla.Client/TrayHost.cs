@@ -91,7 +91,7 @@ sealed class TrayHost : ApplicationContext
     {
         try
         {
-            using var preview = new CapturePreviewForm(png, mode, _upload);
+            using var preview = new CapturePreviewForm(png, mode, _upload, _config);
             preview.ShowDialog();
         }
         catch (Exception ex)

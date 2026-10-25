@@ -15,6 +15,7 @@ sealed class UploadService(AppConfig config)
         string captureMode,
         string? title = null,
         IReadOnlyList<string>? tags = null,
+        string? albumId = null,
         CancellationToken ct = default)
     {
         var baseUrl = ServerConnection.Normalize(config.ServerUrl);
@@ -32,6 +33,7 @@ sealed class UploadService(AppConfig config)
         content.Add(new StringContent(config.ClientName), "client_name");
         content.Add(new StringContent(Environment.MachineName), "hostname");
         content.Add(new StringContent(JsonSerializer.Serialize(tags ?? [])), "tags");
+        content.Add(new StringContent(albumId ?? ""), "album");
         content.Add(new StringContent("false"), "starred");
         content.Add(new StringContent("false"), "analyzed");
 
