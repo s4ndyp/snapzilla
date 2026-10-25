@@ -1165,7 +1165,13 @@ function bindLightboxShotActions(item) {
       const next = !item.starred;
       await patchRecord(item.id, { starred: next });
       item.starred = next;
-      refreshLightbox();
+      const btn = $("lbStar");
+      if (btn) {
+        btn.textContent = next ? "★" : "☆";
+        btn.classList.toggle("lightbox-star-active", next);
+        btn.setAttribute("aria-pressed", next ? "true" : "false");
+        btn.setAttribute("aria-label", next ? "Favoriet verwijderen" : "Als favoriet markeren");
+      }
       renderGallery();
     } catch (err) {
       showToast(err.message, true);
@@ -1177,11 +1183,10 @@ function renderLightboxShotActions(item) {
   const tagValue = parseTags(item.tags).join(", ");
   const albumSel = albumIdOf(item);
   const titleVal = galleryTitleLabel(item) || shotTitleText(item);
+  const starActive = item.starred ? " lightbox-star-active" : "";
   $("lightboxShotActions").innerHTML = `
-    <div class="lightbox-shot-row">
-      <button type="button" class="btn btn-ghost btn-sm" id="lbStar">${item.starred ? "★ Favoriet" : "☆ Favoriet"}</button>
-    </div>
     <div class="lightbox-shot-row lightbox-shot-fields">
+      <button type="button" class="lightbox-star-btn${starActive}" id="lbStar" aria-label="${item.starred ? "Favoriet verwijderen" : "Als favoriet markeren"}" aria-pressed="${item.starred ? "true" : "false"}">${item.starred ? "★" : "☆"}</button>
       <div class="lightbox-shot-field">
         <label for="titleEditor">Titel</label>
         <input class="input" id="titleEditor" value="${escapeHtml(titleVal)}" placeholder="Optionele titel" maxlength="500" />
