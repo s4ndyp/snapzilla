@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Snapzilla — Windows-client</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="bg-glow" aria-hidden="true"></div>
+    <article class="setup-page">
+      <p><a href="/">← Terug naar gallery</a></p>
+      <h1>Windows capture-client</h1>
+      <p>
+        De Snapzilla-client draait in het systeemvak en uploadt screenshots direct naar deze server.
+        Download de installer uit
+        <a href="https://github.com/s4ndyp/snapzilla/releases">GitHub Releases</a>
+        (gebouwd bij elke merge naar <code>main</code>).
+      </p>
+
+      <h2>Installatie</h2>
+      <ol>
+        <li>Installeer <code>SnapzillaSetup.exe</code> van Releases.</li>
+        <li>Open Snapzilla uit het systeemvak → Instellingen.</li>
+        <li>
+          Zet <strong>Server URL</strong> op je Snapzilla-adres, bijvoorbeeld
+          <code>http://192.168.1.10:3000</code> (zonder slash aan het eind).
+        </li>
+        <li>Kies een clientnaam (optioneel) en sla op.</li>
+      </ol>
+
+      <h2>Sneltoetsen (standaard)</h2>
+      <ul>
+        <li><strong>Ctrl+Shift+F11</strong> — volledig scherm</li>
+        <li><strong>Ctrl+Shift+F12</strong> — actief venster</li>
+        <li><strong>Ctrl+Shift+S</strong> — regio selecteren</li>
+      </ul>
+
+      <h2>API-endpoint (handmatig testen)</h2>
+      <pre>POST /api/collections/screenshots/records
+Content-Type: multipart/form-data
+
+image=@screenshot.png
+title=Test
+captured_at=2026-10-25T12:00:00.000Z
+capture_mode=upload
+client_id=my-pc
+client_name=Werk-PC</pre>
+
+      <h2>Docker op Proxmox LXC</h2>
+      <pre>git clone https://github.com/s4ndyp/snapzilla.git
+cd snapzilla
+cp .env.example .env
+docker compose up -d</pre>
+      <p>Web-UI op poort 3000. PocketBase admin: <code>/_/</code> (eerste keer superuser aanmaken).</p>
+    </article>
+  </body>
+</html>

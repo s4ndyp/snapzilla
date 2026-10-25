@@ -1,0 +1,10 @@
+.env
+node_modules/
+pb_data/
+data/
+client/publish/
+client/installer/Output/
+*.user
+bin/
+obj/
+.DS_Store

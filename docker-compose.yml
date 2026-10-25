@@ -1,0 +1,59 @@
+services:
+  pocketbase:
+    image: ghcr.io/muchobien/pocketbase:latest
+    container_name: snapzilla-pocketbase
+    restart: unless-stopped
+    environment:
+      PB_HOST: 0.0.0.0
+      PB_PORT: "8090"
+    volumes:
+      - pb_data:/pb_data
+      - ./pocketbase/pb_migrations:/pb_migrations:ro
+    command:
+      [
+        "serve",
+        "--http=0.0.0.0:8090",
+        "--dir=/pb_data",
+        "--migrationsDir=/pb_migrations",
+        "--automigrate=0",
+      ]
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "wget",
+          "--no-verbose",
+          "--tries=1",
+          "--spider",
+          "http://127.0.0.1:8090/api/health",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  web:
+    build: ./web
+    image: snapzilla-web:latest
+    container_name: snapzilla-web
+    restart: unless-stopped
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    ports:
+      - "${SNAPZILLA_PORT:-3000}:80"
+
+  analyzer:
+    build: ./analyzer
+    image: snapzilla-analyzer:latest
+    container_name: snapzilla-analyzer
+    restart: unless-stopped
+    depends_on:
+      pocketbase:
+        condition: service_healthy
+    environment:
+      POCKETBASE_URL: http://pocketbase:8090
+      POLL_INTERVAL_MS: "5000"
+
+volumes:
+  pb_data:
