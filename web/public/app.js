@@ -101,9 +101,8 @@ function buildFilter(opts = {}) {
     const d = state.dayFilter;
     const start = `${d} 00:00:00.000Z`;
     const end = `${d} 23:59:59.999Z`;
-    parts.push(
-      `((captured_at >= "${start}" && captured_at <= "${end}") || (captured_at = "" && created >= "${start}" && created <= "${end}"))`,
-    );
+    // PocketBase: UTC datums met spatie (geen T), enkel quotes; geen `date = ""` (400).
+    parts.push(`captured_at >= '${start}' && captured_at <= '${end}'`);
   }
   if (state.search.trim()) {
     const q = state.search.trim().replace(/"/g, '\\"');
