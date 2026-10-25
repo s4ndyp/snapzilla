@@ -16,6 +16,8 @@ on:
 jobs:
   build_installer:
     runs-on: windows-latest
+    permissions:
+      contents: read
 
     steps:
       - uses: actions/checkout@v4
@@ -42,14 +44,25 @@ jobs:
         with:
           name: SnapzillaSetup
           path: client/installer/Output/SnapzillaSetup.exe
+          retention-days: 90
 
-      - name: Upload to Release (main)
-        if: github.ref == 'refs/heads/main'
+  release:
+    needs: build_installer
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download installer
+        uses: actions/download-artifact@v4
+        with:
+          name: SnapzillaSetup
+
+      - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: client-v${{ github.run_number }}
           name: Snapzilla client build ${{ github.run_number }}
-          files: client/installer/Output/SnapzillaSetup.exe
+          files: SnapzillaSetup.exe
           generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
