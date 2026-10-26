@@ -70,7 +70,13 @@ docker compose up -d --build
 3. Test vanaf de client-PC in de browser: `http://<server-ip>/api/health`.
 4. In de Windows-client: **zelfde basis-URL** (geen `:3000` als de site op 80 staat). Gebruik **Test / zoek server** — de client probeert ook poort 80 en 3000.
 
-Collecties worden automatisch aangemaakt via `pocketbase/pb_migrations/`.
+Collecties komen uit `pocketbase/pb_migrations/`. Bij elke start voert PocketBase **`migrate up`** uit. Bestaande server na OCR-update:
+
+```bash
+cd /opt/snapzilla
+bash scripts/pb-migrate.sh
+docker compose up -d --build web
+```
 
 Bij de eerste start wordt de OCR-image (`gunthercox/ocr-service`) gedownload; reken op extra RAM/CPU tijdens analyse. Bestaande screenshots krijgen geen OCR retroactief — alleen nieuwe uploads na deze update (of na reset van `analyzed`).
 
