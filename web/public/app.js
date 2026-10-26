@@ -393,6 +393,65 @@ async function createAlbum(name) {
   return res.json();
 }
 
+async function deleteAlbumRecord(id) {
+  const res = await fetch(`${API}/collections/albums/records/${id}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error(await res.text());
+}
+
+async function forEachScreenshotInAlbum(albumId, fn) {
+  let page = 1;
+  for (;;) {
+    const filter = `album = "${albumId.replace(/"/g, '\\"')}"`;
+    const params = new URLSearchParams({
+      page: String(page),
+      perPage: "200",
+      filter,
+    });
+    const res = await fetch(`${API}/collections/${COLLECTION}/records?${params}`);
+    if (!res.ok) throw new Error(await res.text());
+    const json = await res.json();
+    for (const item of json.items) {
+      await fn(item);
+    }
+    if (page >= json.totalPages) break;
+    page += 1;
+  }
+}
+
+/** @type {{ id: string, name: string } | null} */
+let pendingDeleteAlbum = null;
+
+function openDeleteAlbumModal(album) {
+  pendingDeleteAlbum = album;
+  $("deleteAlbumHint").textContent = `Album “${album.name}” definitief verwijderen?`;
+  $("deleteAlbumModal").showModal();
+}
+
+async function removeAlbum(albumId, deleteShots) {
+  if (deleteShots) {
+    await forEachScreenshotInAlbum(albumId, async (item) => {
+      await deleteRecord(item.id);
+    });
+  } else {
+    await forEachScreenshotInAlbum(albumId, async (item) => {
+      await patchRecord(item.id, { album: "" });
+      const local = state.items.find((x) => x.id === item.id);
+      if (local) local.album = null;
+    });
+  }
+  await deleteAlbumRecord(albumId);
+  if (state.albumId === albumId) state.albumId = null;
+  const alb = await listAlbums();
+  state.albums = alb.items || [];
+  populateBulkAlbumSelect();
+  await reload();
+  showToast(
+    deleteShots ? "Album en screenshots verwijderd" : "Album verwijderd — screenshots blijven zonder album",
+  );
+}
+
 function computePhashGroups(items) {
   const map = new Map();
   for (const item of items) {
@@ -536,6 +595,7 @@ function renderSidebarLists() {
   albumList.appendChild(allBtn);
   for (const alb of state.albums) {
     const li = document.createElement("li");
+    li.className = "album-list-item";
     const btn = document.createElement("button");
     btn.type = "button";
     const albumActive = state.albumId === alb.id;
@@ -546,7 +606,18 @@ function renderSidebarLists() {
       state.albumId = state.albumId === alb.id ? null : alb.id;
       reload();
     });
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "album-delete-btn";
+    del.setAttribute("aria-label", `Album ${alb.name} verwijderen`);
+    del.title = "Album verwijderen";
+    del.textContent = "×";
+    del.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openDeleteAlbumModal({ id: alb.id, name: alb.name });
+    });
     li.appendChild(btn);
+    li.appendChild(del);
     albumList.appendChild(li);
   }
 }
@@ -1530,6 +1601,26 @@ async function init() {
       showToast(err.message, true);
     }
   });
+
+  $("deleteAlbumCancelBtn").addEventListener("click", () => {
+    pendingDeleteAlbum = null;
+    $("deleteAlbumModal").close();
+  });
+
+  const runAlbumDelete = async (deleteShots) => {
+    const target = pendingDeleteAlbum;
+    if (!target) return;
+    $("deleteAlbumModal").close();
+    pendingDeleteAlbum = null;
+    try {
+      await removeAlbum(target.id, deleteShots);
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  };
+
+  $("deleteAlbumOnlyBtn").addEventListener("click", () => runAlbumDelete(false));
+  $("deleteAlbumAndShotsBtn").addEventListener("click", () => runAlbumDelete(true));
 
   document.addEventListener("keydown", (e) => {
     if (!$("lightbox").open) return;
