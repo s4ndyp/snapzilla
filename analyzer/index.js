@@ -7,7 +7,7 @@ const PB = (process.env.POCKETBASE_URL || "http://pocketbase:8090").replace(
 );
 const POLL_MS = Number(process.env.POLL_INTERVAL_MS) || 5000;
 const OPENROUTER_API_KEY = (process.env.OPENROUTER_API_KEY || "").trim();
-const OPENROUTER_MODEL =
+const OPENROUTER_MODEL_DEFAULT =
   process.env.OPENROUTER_MODEL || "google/gemini-2.0-flash-001";
 const OPENROUTER_BASE =
   (process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1").replace(
@@ -20,8 +20,12 @@ const VISION_MAX_WIDTH = Number(process.env.VISION_MAX_WIDTH) || 1600;
 const OCR_TEXT_MAX = 50_000;
 const SETTINGS_CACHE_MS = 3000;
 
-/** @type {{ value: boolean, ts: number }} */
-let ocrEnabledCache = { value: true, ts: 0 };
+/** @type {{ ts: number, enabled: boolean, model: string }} */
+let settingsCache = {
+  ts: 0,
+  enabled: true,
+  model: OPENROUTER_MODEL_DEFAULT,
+};
 
 async function pbFetch(path, options = {}) {
   const res = await fetch(`${PB}${path}`, options);
@@ -75,9 +79,9 @@ async function prepareVisionImage(buffer) {
   return pipeline.jpeg({ quality: 85 }).toBuffer();
 }
 
-async function fetchOcrEnabledFromServer() {
-  if (Date.now() - ocrEnabledCache.ts < SETTINGS_CACHE_MS) {
-    return ocrEnabledCache.value;
+async function fetchSnapzillaSettings() {
+  if (Date.now() - settingsCache.ts < SETTINGS_CACHE_MS) {
+    return settingsCache;
   }
   try {
     const res = await pbFetch(
@@ -86,13 +90,28 @@ async function fetchOcrEnabledFromServer() {
     const json = await res.json();
     const item = json.items?.[0];
     const enabled = item ? item.ocr_enabled !== false : true;
-    ocrEnabledCache = { value: enabled, ts: Date.now() };
-    return enabled;
+    const model =
+      (typeof item?.ocr_model === "string" && item.ocr_model.trim()) ||
+      OPENROUTER_MODEL_DEFAULT;
+    settingsCache = { enabled, model, ts: Date.now() };
+    return settingsCache;
   } catch (err) {
-    console.warn("[ocr] settings unreadable, default on:", err.message);
-    ocrEnabledCache = { value: true, ts: Date.now() };
-    return true;
+    console.warn("[ocr] settings unreadable, defaults:", err.message);
+    settingsCache = {
+      enabled: true,
+      model: OPENROUTER_MODEL_DEFAULT,
+      ts: Date.now(),
+    };
+    return settingsCache;
   }
+}
+
+async function fetchOcrEnabledFromServer() {
+  return (await fetchSnapzillaSettings()).enabled;
+}
+
+async function fetchOcrModelFromServer() {
+  return (await fetchSnapzillaSettings()).model;
 }
 
 const OCR_PROMPT = `Extract all readable text from this screenshot image.
@@ -101,10 +120,12 @@ Include UI labels, window titles, buttons, and body text.
 Do not add markdown, quotes, or commentary.
 If there is no readable text, reply with exactly: [empty]`;
 
-async function runOpenRouterOcr(buffer) {
+async function runOpenRouterOcr(buffer, modelId) {
   if (!OPENROUTER_API_KEY) {
     return { text: "", status: "no_key" };
   }
+
+  const model = modelId || (await fetchOcrModelFromServer());
 
   const jpeg = await prepareVisionImage(buffer);
   const b64 = jpeg.toString("base64");
@@ -122,7 +143,7 @@ async function runOpenRouterOcr(buffer) {
         "X-Title": "Snapzilla Analyzer",
       },
       body: JSON.stringify({
-        model: OPENROUTER_MODEL,
+        model,
         temperature: 0,
         messages: [
           {
@@ -163,7 +184,8 @@ async function runOcrForRecord(record, buffer) {
   if (!OPENROUTER_API_KEY) return { text: "", status: "no_key" };
 
   try {
-    return await runOpenRouterOcr(buffer);
+    const model = await fetchOcrModelFromServer();
+    return await runOpenRouterOcr(buffer, model);
   } catch (err) {
     console.error(`[ocr] failed ${record.id}:`, err.message);
     return { text: "", status: "failed" };
@@ -299,7 +321,10 @@ async function pollOnce() {
 async function main() {
   console.log(`Snapzilla analyzer → ${PB} (poll ${POLL_MS}ms)`);
   if (OPENROUTER_API_KEY) {
-    console.log(`[ocr] OpenRouter model=${OPENROUTER_MODEL}`);
+    const { model } = await fetchSnapzillaSettings();
+    console.log(
+      `[ocr] OpenRouter default=${OPENROUTER_MODEL_DEFAULT} active=${model}`,
+    );
   } else {
     console.log(
       "[ocr] disabled — set OPENROUTER_API_KEY in .env (screenshots worden wel geanalyseerd zonder tekst)",

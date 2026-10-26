@@ -79,8 +79,11 @@ In `/opt/snapzilla/.env`:
 
 ```env
 OPENROUTER_API_KEY=sk-or-v1-...
-# optioneel: OPENROUTER_MODEL=google/gemini-2.0-flash-001
+# optioneel fallback als er nog geen model in de UI staat:
+# OPENROUTER_MODEL=google/gemini-2.0-flash-001
 ```
+
+In de web-UI: knop **Model …** → actief model kiezen, handmatig installeren, of uit de **OpenRouter-catalogus** (vision-modellen). Keuze wordt in PocketBase opgeslagen (`snapzilla_settings`).
 
 Daarna `bash scripts/update.sh` of `docker compose up -d --build analyzer`.
 
