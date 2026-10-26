@@ -45,8 +45,8 @@ Vergelijkbaar met [fileshare](https://github.com/s4ndyp/fileshare): één `docke
 git clone https://github.com/s4ndyp/snapzilla.git
 cd snapzilla
 cp .env.example .env
-# Vul OPENROUTER_API_KEY in .env voor tekstherkenning
 docker compose up -d --build
+# OpenRouter-key: in de UI onder Model …, of OPENROUTER_API_KEY in .env
 ```
 
 Lokale poort/tweaks: `docker-compose.override.yml` (zie `docker-compose.override.example.yml`), niet `docker-compose.yml` handmatig wijzigen.
@@ -75,15 +75,16 @@ Collecties komen uit `pocketbase/pb_migrations/` (toegepast via `scripts/update.
 
 ### Tekst / OCR (OpenRouter)
 
-In `/opt/snapzilla/.env`:
+In de web-UI: **Model …** → **OpenRouter API-key** opslaan (met test vóór opslaan), **Key testen**, **OCR-test (key + model)**, actief model kiezen, modellen installeren. Alles in PocketBase (`snapzilla_settings`).
+
+Alternatief of fallback in `/opt/snapzilla/.env`:
 
 ```env
 OPENROUTER_API_KEY=sk-or-v1-...
-# optioneel fallback als er nog geen model in de UI staat:
 # OPENROUTER_MODEL=google/gemini-2.0-flash-001
 ```
 
-In de web-UI: knop **Model …** → actief model kiezen, handmatig installeren, of uit de **OpenRouter-catalogus** (vision-modellen). Keuze wordt in PocketBase opgeslagen (`snapzilla_settings`).
+**Let op:** zonder PocketBase-login is de key via de API leesbaar voor iedereen op je netwerk — alleen op een vertrouwd LAN gebruiken.
 
 Daarna `bash scripts/update.sh` of `docker compose up -d --build analyzer`.
 

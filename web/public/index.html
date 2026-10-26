@@ -293,6 +293,7 @@
           Snapzilla heeft geen login — iedereen op je netwerk kan instellingen (inclusief API-key) lezen via de API.
           Gebruik dit alleen op een vertrouwd LAN, of zet later PocketBase-regels aan.
         </p>
+        <div class="ocr-feedback" id="ocrFeedback" hidden role="status" aria-live="polite"></div>
         <form id="ocrApiKeyForm" class="ocr-api-key-form">
           <h3 class="ocr-subheading">OpenRouter API-key</h3>
           <p class="hint" id="ocrApiKeyStatus">Nog geen key ingesteld.</p>
@@ -309,6 +310,7 @@
           </label>
           <div class="ocr-api-key-actions">
             <button type="submit" class="btn btn-primary btn-sm">Key opslaan</button>
+            <button type="button" class="btn btn-ghost btn-sm" id="ocrApiKeyTestBtn">Key testen</button>
             <button type="button" class="btn btn-ghost btn-sm" id="ocrApiKeyClearBtn">Key wissen</button>
           </div>
         </form>
@@ -316,6 +318,11 @@
           <span>Actief model</span>
           <select id="ocrModelSelect" class="input"></select>
         </label>
+        <div class="ocr-api-key-actions ocr-model-test-row">
+          <button type="button" class="btn btn-ghost btn-sm" id="ocrPipelineTestBtn">
+            OCR-test (key + model)
+          </button>
+        </div>
         <div class="ocr-installed-block">
           <h3 class="ocr-subheading">Geïnstalleerde modellen</h3>
           <ul class="ocr-model-list" id="ocrInstalledList"></ul>
