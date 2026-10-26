@@ -979,6 +979,11 @@ body {
   color: #450a0a;
 }
 
+.shot-ocr-no_key {
+  background: rgba(251, 191, 36, 0.95);
+  color: #422006;
+}
+
 .ocr-meta-dd {
   display: flex;
   flex-direction: column;
@@ -1013,6 +1018,11 @@ body {
 .ocr-pill-failed {
   background: rgba(248, 113, 113, 0.2);
   color: #f87171;
+}
+
+.ocr-pill-no_key {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
 }
 
 .ocr-detail {

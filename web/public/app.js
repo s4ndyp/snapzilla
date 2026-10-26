@@ -53,14 +53,30 @@ function isRecordAnalyzed(item) {
 
 /** @returns {{ status: string, label: string, detail: string }} */
 function describeOcr(item) {
+  const st = String(item.ocr_status || "").toLowerCase();
   if (!isRecordAnalyzed(item)) {
     return {
       status: "pending",
       label: "Bezig…",
-      detail: "Screenshot wordt geanalyseerd; OCR volgt zodra de analyzer klaar is.",
+      detail:
+        "Screenshot wordt geanalyseerd. Draait snapzilla-analyzer niet? docker compose ps / logs analyzer.",
     };
   }
-  const st = String(item.ocr_status || "").toLowerCase();
+  if (st === "pending") {
+    return {
+      status: "pending",
+      label: "OCR…",
+      detail: "Tekst wordt via OpenRouter uit de afbeelding gehaald.",
+    };
+  }
+  if (st === "no_key") {
+    return {
+      status: "no_key",
+      label: "Geen API-key",
+      detail:
+        "Zet OPENROUTER_API_KEY in /opt/snapzilla/.env en voer docker compose up -d --build analyzer uit.",
+    };
+  }
   if (st === "skipped") {
     return {
       status: "skipped",
@@ -73,7 +89,7 @@ function describeOcr(item) {
       status: "failed",
       label: "Mislukt",
       detail:
-        "OCR is mislukt. Controleer of de containers snapzilla-analyzer en snapzilla-ocr draaien (docker compose ps).",
+        "OpenRouter-OCR mislukt. Controleer OPENROUTER_API_KEY, saldo en docker compose logs analyzer.",
     };
   }
   if (item.ocr_text) {
@@ -95,11 +111,12 @@ function describeOcr(item) {
 
 function itemWantsAnalysisPoll(item) {
   if (!isRecordAnalyzed(item)) return true;
-  if (item.ocr_text) return false;
   const st = String(item.ocr_status || "").toLowerCase();
+  if (st === "pending") return true;
+  if (item.ocr_text) return false;
   if (st === "done" || st === "empty") return false;
   if (snapzillaSettings && snapzillaSettings.ocr_enabled === false) return false;
-  return st === "skipped" || st === "failed" || st === "";
+  return st === "skipped" || st === "failed" || st === "no_key" || st === "";
 }
 
 let analysisPollTimer = null;
