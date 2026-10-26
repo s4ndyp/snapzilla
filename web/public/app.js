@@ -386,12 +386,18 @@ async function createRecord(formData) {
 
 /** @type {{ id: string, ocr_enabled?: boolean } | null} */
 let snapzillaSettings = null;
+let snapzillaSettingsMissing = false;
 
 async function loadSnapzillaSettings() {
+  snapzillaSettingsMissing = false;
   try {
     const res = await fetch(
       `${API}/collections/${SETTINGS_COLLECTION}/records?perPage=1`,
     );
+    if (res.status === 404) {
+      snapzillaSettingsMissing = true;
+      return null;
+    }
     if (!res.ok) return null;
     const json = await res.json();
     if (json.items?.length) {
