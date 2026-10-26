@@ -35,6 +35,7 @@ Dark-mode webplatform voor het **opslaan**, **organiseren**, **bekijken** en **a
 - Breedte/hoogte, bestandsgrootte
 - Dominante kleur
 - Perceptual hash voor duplicaten
+- **OCR** (Tesseract, Nederlands + Engels) via aparte container `ocr`; tekst in `ocr_text`, doorzoekbaar in de gallery. In de web-UI: knop **OCR aan/uit** (alleen nieuwe uploads).
 
 ## Snel starten (Docker)
 
@@ -58,6 +59,14 @@ docker compose up -d --build
 4. In de Windows-client: **zelfde basis-URL** (geen `:3000` als de site op 80 staat). Gebruik **Test / zoek server** — de client probeert ook poort 80 en 3000.
 
 Collecties worden automatisch aangemaakt via `pocketbase/pb_migrations/`.
+
+Bij de eerste start wordt de OCR-image (`gunthercox/ocr-service`) gedownload; reken op extra RAM/CPU tijdens analyse. Bestaande screenshots krijgen geen OCR retroactief — alleen nieuwe uploads na deze update (of na reset van `analyzed`).
+
+Na een update: herstart PocketBase zodat migratie `snapzilla_settings` draait (collectie voor de OCR-knop). Zie PocketBase logs als de knop **OCR** niet verschijnt.
+
+### OCR uitschakelen
+
+Haal de `ocr`-service uit `docker-compose.yml` weg en laat `OCR_SERVICE_URL` leeg in de `analyzer`-omgeving.
 
 ## Windows-client
 

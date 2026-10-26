@@ -43,6 +43,21 @@ services:
     ports:
       - "${SNAPZILLA_PORT:-3000}:80"
 
+  ocr:
+    image: gunthercox/ocr-service:1.1.2-tesseract
+    container_name: snapzilla-ocr
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:5000/health')\"",
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+
   analyzer:
     build: ./analyzer
     image: snapzilla-analyzer:latest
@@ -51,9 +66,16 @@ services:
     depends_on:
       pocketbase:
         condition: service_healthy
+      ocr:
+        condition: service_started
     environment:
       POCKETBASE_URL: http://pocketbase:8090
       POLL_INTERVAL_MS: "5000"
+      OCR_SERVICE_URL: http://ocr:5000
+      OCR_ENGINE: tesseract
+      OCR_LANG: nld+eng
+      OCR_TIMEOUT_MS: "120000"
+      OCR_MAX_WIDTH: "2000"
 
 volumes:
   pb_data:

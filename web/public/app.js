@@ -1,5 +1,6 @@
 const API = "/api";
 const COLLECTION = "screenshots";
+const SETTINGS_COLLECTION = "snapzilla_settings";
 const PER_PAGE = 48;
 
 const state = {
@@ -381,6 +382,71 @@ async function createRecord(formData) {
   });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
+}
+
+/** @type {{ id: string, ocr_enabled?: boolean } | null} */
+let snapzillaSettings = null;
+
+async function loadSnapzillaSettings() {
+  try {
+    const res = await fetch(
+      `${API}/collections/${SETTINGS_COLLECTION}/records?perPage=1`,
+    );
+    if (!res.ok) return null;
+    const json = await res.json();
+    if (json.items?.length) {
+      snapzillaSettings = json.items[0];
+      return snapzillaSettings;
+    }
+    const createRes = await fetch(
+      `${API}/collections/${SETTINGS_COLLECTION}/records`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ocr_enabled: true }),
+      },
+    );
+    if (!createRes.ok) return null;
+    snapzillaSettings = await createRes.json();
+    return snapzillaSettings;
+  } catch {
+    return null;
+  }
+}
+
+async function setOcrEnabled(enabled) {
+  if (!snapzillaSettings) {
+    const loaded = await loadSnapzillaSettings();
+    if (!loaded) throw new Error("Instellingen niet beschikbaar");
+  }
+  const res = await fetch(
+    `${API}/collections/${SETTINGS_COLLECTION}/records/${snapzillaSettings.id}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ocr_enabled: enabled }),
+    },
+  );
+  if (!res.ok) throw new Error(await res.text());
+  snapzillaSettings.ocr_enabled = enabled;
+  updateOcrToggleButton();
+}
+
+function updateOcrToggleButton() {
+  const btn = $("ocrToggleBtn");
+  if (!btn) return;
+  if (!snapzillaSettings) {
+    btn.hidden = true;
+    return;
+  }
+  btn.hidden = false;
+  const on = snapzillaSettings.ocr_enabled !== false;
+  btn.textContent = on ? "OCR aan" : "OCR uit";
+  btn.setAttribute("aria-pressed", on ? "true" : "false");
+  btn.classList.toggle("ocr-toggle-on", on);
+  btn.title = on
+    ? "OCR aan voor nieuwe screenshots — klik om uit te zetten"
+    : "OCR uit voor nieuwe screenshots — klik om aan te zetten";
 }
 
 async function createAlbum(name) {
@@ -1438,6 +1504,23 @@ async function init() {
   });
 
   $("refreshBtn").addEventListener("click", () => reload());
+
+  await loadSnapzillaSettings();
+  updateOcrToggleButton();
+  $("ocrToggleBtn")?.addEventListener("click", async () => {
+    if (!snapzillaSettings) return;
+    const next = snapzillaSettings.ocr_enabled === false;
+    try {
+      await setOcrEnabled(next);
+      showToast(
+        next
+          ? "OCR aan voor nieuwe screenshots"
+          : "OCR uit voor nieuwe screenshots",
+      );
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
 
   $("clearDateFilter")?.addEventListener("click", () => {
     state.dayFilter = null;
