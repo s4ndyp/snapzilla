@@ -46,6 +46,102 @@ function fileUrl(record) {
   return `${API}/files/${COLLECTION}/${record.id}/${name}`;
 }
 
+/** @returns {boolean} */
+function isRecordAnalyzed(item) {
+  return item.analyzed === true || item.analyzed === "true";
+}
+
+/** @returns {{ status: string, label: string, detail: string }} */
+function describeOcr(item) {
+  if (!isRecordAnalyzed(item)) {
+    return {
+      status: "pending",
+      label: "Bezig…",
+      detail: "Screenshot wordt geanalyseerd; OCR volgt zodra de analyzer klaar is.",
+    };
+  }
+  const st = String(item.ocr_status || "").toLowerCase();
+  if (st === "skipped") {
+    return {
+      status: "skipped",
+      label: "Overgeslagen",
+      detail: "OCR stond uit toen deze screenshot verwerkt werd.",
+    };
+  }
+  if (st === "failed") {
+    return {
+      status: "failed",
+      label: "Mislukt",
+      detail:
+        "OCR is mislukt. Controleer of de containers snapzilla-analyzer en snapzilla-ocr draaien (docker compose ps).",
+    };
+  }
+  if (item.ocr_text) {
+    return { status: "done", label: "Gelukt", detail: item.ocr_text };
+  }
+  if (st === "empty") {
+    return {
+      status: "empty",
+      label: "Geen tekst",
+      detail: "Geen leesbare tekst in deze afbeelding gevonden.",
+    };
+  }
+  return {
+    status: "unknown",
+    label: "—",
+    detail: "Geen OCR-tekst (oudere screenshot of nog niet opnieuw verwerkt).",
+  };
+}
+
+function itemWantsAnalysisPoll(item) {
+  if (!isRecordAnalyzed(item)) return true;
+  if (item.ocr_text) return false;
+  const st = String(item.ocr_status || "").toLowerCase();
+  if (st === "done" || st === "empty") return false;
+  if (snapzillaSettings && snapzillaSettings.ocr_enabled === false) return false;
+  return st === "skipped" || st === "failed" || st === "";
+}
+
+let analysisPollTimer = null;
+
+function scheduleAnalysisPoll() {
+  if (analysisPollTimer) return;
+  if (!state.items.some(itemWantsAnalysisPoll)) return;
+  analysisPollTimer = setInterval(() => {
+    if (!state.items.some(itemWantsAnalysisPoll)) {
+      clearInterval(analysisPollTimer);
+      analysisPollTimer = null;
+      return;
+    }
+    void reload(false, { preserveSelection: true, fromAnalysisPoll: true });
+  }, 4000);
+  setTimeout(() => {
+    if (analysisPollTimer) {
+      clearInterval(analysisPollTimer);
+      analysisPollTimer = null;
+    }
+  }, 120_000);
+}
+
+function renderOcrBadgeHtml(item) {
+  const ocr = describeOcr(item);
+  if (ocr.status === "unknown") return "";
+  return `<span class="shot-ocr-badge shot-ocr-${ocr.status}" title="${escapeHtml(ocr.detail.slice(0, 200))}">${escapeHtml(ocr.label)}</span>`;
+}
+
+function renderLightboxOcrHtml(item) {
+  const ocr = describeOcr(item);
+  const preview =
+    ocr.status === "done"
+      ? escapeHtml(ocr.detail.slice(0, 2000))
+      : escapeHtml(ocr.detail);
+  const more =
+    ocr.status === "done" && ocr.detail.length > 2000
+      ? `<p class="ocr-trunc-hint">… ${ocr.detail.length - 2000} tekens extra — gebruik zoeken om alles te vinden.</p>`
+      : "";
+  return `<span class="ocr-status-pill ocr-pill-${ocr.status}">${escapeHtml(ocr.label)}</span><div class="ocr-detail">${preview}</div>${more}`;
+}
+
 function formatBytes(n) {
   if (!n) return "—";
   const u = ["B", "KB", "MB", "GB"];
@@ -442,9 +538,19 @@ function updateOcrToggleButton() {
   const btn = $("ocrToggleBtn");
   if (!btn) return;
   if (!snapzillaSettings) {
-    btn.hidden = true;
+    if (snapzillaSettingsMissing) {
+      btn.hidden = false;
+      btn.disabled = true;
+      btn.classList.remove("ocr-toggle-on");
+      btn.textContent = "OCR — migratie";
+      btn.title =
+        "Database-migratie ontbreekt. Op de server: bash scripts/pb-migrate.sh";
+    } else {
+      btn.hidden = true;
+    }
     return;
   }
+  btn.disabled = false;
   btn.hidden = false;
   const on = snapzillaSettings.ocr_enabled !== false;
   btn.textContent = on ? "OCR aan" : "OCR uit";
@@ -766,6 +872,14 @@ function renderGallery() {
       dup.className = "shot-dup";
       dup.textContent = "dup";
       thumb.appendChild(dup);
+    }
+
+    const ocrBadgeHtml = renderOcrBadgeHtml(item);
+    if (ocrBadgeHtml) {
+      const ocrEl = document.createElement("span");
+      ocrEl.className = "shot-ocr-wrap";
+      ocrEl.innerHTML = ocrBadgeHtml;
+      thumb.appendChild(ocrEl);
     }
 
     const meta = document.createElement("div");
@@ -1381,7 +1495,7 @@ function refreshLightbox() {
       <dt>Modus</dt><dd>${escapeHtml(item.capture_mode || "—")}</dd>
       <dt>Kleuren</dt><dd>${colorHtml || "—"}</dd>
       <dt>pHash</dt><dd>${escapeHtml(item.phash || "—")}</dd>
-      <dt>OCR</dt><dd>${escapeHtml(item.ocr_text ? item.ocr_text.slice(0, 500) : "—")}</dd>
+      <dt>OCR</dt><dd class="ocr-meta-dd">${renderLightboxOcrHtml(item)}</dd>
       <dt>Notities</dt>
       <dd><textarea id="notesEditor">${escapeHtml(item.notes || "")}</textarea></dd>
     </dl>
@@ -1446,6 +1560,11 @@ async function uploadFiles(files, mode = "upload") {
 
 async function reload(append = false, options = {}) {
   const preserveSelection = options.preserveSelection !== false;
+  const lightboxOpen = Boolean($("lightbox")?.open);
+  const lightboxId =
+    lightboxOpen && state.lightboxIndex >= 0
+      ? state.items[state.lightboxIndex]?.id
+      : null;
   try {
     const data = await listRecords(append ? state.page + 1 : 1);
     if (append) {
@@ -1465,6 +1584,10 @@ async function reload(append = false, options = {}) {
       updateBulkUi();
     }
     state.totalPages = data.totalPages;
+    if (lightboxId) {
+      const idx = state.items.findIndex((x) => x.id === lightboxId);
+      if (idx >= 0) state.lightboxIndex = idx;
+    }
     computePhashGroups(state.items);
     await loadActivityByDay();
     ensureCalendarMonthVisible();
@@ -1472,6 +1595,13 @@ async function reload(append = false, options = {}) {
     renderCalendar();
     renderSidebarLists();
     renderGallery();
+    if (lightboxOpen && lightboxId && state.lightboxIndex >= 0) {
+      const dd = document.querySelector(".ocr-meta-dd");
+      if (dd) {
+        dd.innerHTML = renderLightboxOcrHtml(state.items[state.lightboxIndex]);
+      }
+    }
+    scheduleAnalysisPoll();
   } catch (err) {
     showToast(`Laden mislukt: ${err.message}`, true);
   }
@@ -1513,6 +1643,12 @@ async function init() {
 
   await loadSnapzillaSettings();
   updateOcrToggleButton();
+  if (snapzillaSettingsMissing) {
+    showToast(
+      "OCR-instellingen ontbreken — op de server: bash scripts/pb-migrate.sh",
+      true,
+    );
+  }
   $("ocrToggleBtn")?.addEventListener("click", async () => {
     if (!snapzillaSettings) return;
     const next = snapzillaSettings.ocr_enabled === false;
@@ -1520,9 +1656,10 @@ async function init() {
       await setOcrEnabled(next);
       showToast(
         next
-          ? "OCR aan voor nieuwe screenshots"
+          ? "OCR aan — nieuwe shots en shots zonder tekst worden verwerkt"
           : "OCR uit voor nieuwe screenshots",
       );
+      scheduleAnalysisPoll();
     } catch (err) {
       showToast(err.message, true);
     }

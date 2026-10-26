@@ -122,6 +122,26 @@ async function runOcr(buffer) {
   }
 }
 
+async function runOcrForRecord(record, buffer) {
+  if (!OCR_URL) return { text: "", status: "skipped" };
+  const enabled = await fetchOcrEnabledFromServer();
+  if (!enabled) return { text: "", status: "skipped" };
+
+  try {
+    const text = await runOcr(buffer);
+    if (text) return { text, status: "done" };
+    return { text: "", status: "empty" };
+  } catch (err) {
+    console.error(`[ocr] failed ${record.id}:`, err.message);
+    return { text: "", status: "failed" };
+  }
+}
+
+function appendOcrFields(body, ocrText, ocrStatus) {
+  if (ocrStatus) body.append("ocr_status", ocrStatus);
+  if (ocrText) body.append("ocr_text", ocrText);
+}
+
 async function analyzeRecord(record) {
   const imageName = record.image;
   if (!imageName) return;
@@ -133,14 +153,10 @@ async function analyzeRecord(record) {
   const phash = await computePhash(buffer);
   const colors = await extractColors(buffer);
 
-  let ocrText = "";
-  if (OCR_URL && (await fetchOcrEnabledFromServer())) {
-    try {
-      ocrText = await runOcr(buffer);
-    } catch (err) {
-      console.error(`[ocr] failed ${record.id}:`, err.message);
-    }
-  }
+  const { text: ocrText, status: ocrStatus } = await runOcrForRecord(
+    record,
+    buffer,
+  );
 
   const body = new FormData();
   body.append("width", String(meta.width || 0));
@@ -149,9 +165,7 @@ async function analyzeRecord(record) {
   body.append("phash", phash);
   body.append("colors", JSON.stringify(colors));
   body.append("analyzed", "true");
-  if (ocrText) {
-    body.append("ocr_text", ocrText);
-  }
+  appendOcrFields(body, ocrText, ocrStatus);
   if (!record.captured_at) {
     body.append("captured_at", new Date().toISOString());
   }
@@ -162,19 +176,44 @@ async function analyzeRecord(record) {
   });
 
   const ocrHint = ocrText
-    ? ` ocr=${ocrText.length} chars`
+    ? ` ocr=${ocrText.length} chars (${ocrStatus})`
     : OCR_URL
-      ? " ocr=—"
+      ? ` ocr=${ocrStatus}`
       : "";
   console.log(
     `[analyze] ${record.id} ${meta.width}x${meta.height} phash=${phash}${ocrHint}`,
   );
 }
 
+/** Re-run OCR on shots that were analyzed without text (OCR was off or failed). */
+async function ocrBackfillRecord(record) {
+  const imageName = record.image;
+  if (!imageName) return;
+
+  const res = await pbFetch(fileUrl(record, imageName));
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const { text: ocrText, status: ocrStatus } = await runOcrForRecord(
+    record,
+    buffer,
+  );
+
+  const body = new FormData();
+  appendOcrFields(body, ocrText, ocrStatus);
+  await pbFetch(`/api/collections/screenshots/records/${record.id}`, {
+    method: "PATCH",
+    body,
+  });
+
+  const ocrHint = ocrText
+    ? ` ocr=${ocrText.length} chars (${ocrStatus})`
+    : ` ocr=${ocrStatus}`;
+  console.log(`[ocr-backfill] ${record.id}${ocrHint}`);
+}
+
 async function pollOnce() {
-  const q = encodeURIComponent("analyzed != true");
+  const pendingFilter = encodeURIComponent("analyzed != true");
   const res = await pbFetch(
-    `/api/collections/screenshots/records?perPage=5&filter=${q}&sort=-created`,
+    `/api/collections/screenshots/records?perPage=5&filter=${pendingFilter}&sort=-created`,
   );
   const json = await res.json();
   for (const item of json.items || []) {
@@ -182,6 +221,23 @@ async function pollOnce() {
       await analyzeRecord(item);
     } catch (err) {
       console.error(`[analyze] failed ${item.id}:`, err.message);
+    }
+  }
+
+  if (!OCR_URL || !(await fetchOcrEnabledFromServer())) return;
+
+  const backfillFilter = encodeURIComponent(
+    'analyzed = true && ocr_text = "" && (ocr_status = "" || ocr_status = "skipped" || ocr_status = "failed")',
+  );
+  const back = await pbFetch(
+    `/api/collections/screenshots/records?perPage=2&filter=${backfillFilter}&sort=-created`,
+  );
+  const backJson = await back.json();
+  for (const item of backJson.items || []) {
+    try {
+      await ocrBackfillRecord(item);
+    } catch (err) {
+      console.error(`[ocr-backfill] failed ${item.id}:`, err.message);
     }
   }
 }

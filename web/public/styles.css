@@ -936,6 +936,100 @@ body {
   z-index: 1;
 }
 
+.shot-ocr-wrap {
+  position: absolute;
+  bottom: 0.4rem;
+  left: 0.4rem;
+  z-index: 1;
+  max-width: calc(100% - 0.8rem);
+}
+
+.shot-ocr-badge {
+  display: inline-block;
+  font-size: 0.62rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  font-weight: 600;
+  line-height: 1.2;
+  border: 1px solid transparent;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.shot-ocr-pending {
+  background: rgba(107, 159, 255, 0.92);
+  color: #0a0e1a;
+}
+
+.shot-ocr-done {
+  background: rgba(52, 211, 153, 0.92);
+  color: #052e1f;
+}
+
+.shot-ocr-empty,
+.shot-ocr-skipped {
+  background: rgba(148, 163, 184, 0.9);
+  color: #111827;
+}
+
+.shot-ocr-failed {
+  background: rgba(248, 113, 113, 0.95);
+  color: #450a0a;
+}
+
+.ocr-meta-dd {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.ocr-status-pill {
+  align-self: flex-start;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+}
+
+.ocr-pill-pending {
+  background: rgba(107, 159, 255, 0.25);
+  color: var(--accent);
+}
+
+.ocr-pill-done {
+  background: rgba(52, 211, 153, 0.2);
+  color: #34d399;
+}
+
+.ocr-pill-empty,
+.ocr-pill-skipped,
+.ocr-pill-unknown {
+  color: var(--text-muted);
+  background: var(--bg-hover);
+}
+
+.ocr-pill-failed {
+  background: rgba(248, 113, 113, 0.2);
+  color: #f87171;
+}
+
+.ocr-detail {
+  font-size: 0.85rem;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 12rem;
+  overflow: auto;
+}
+
+.ocr-trunc-hint {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
 .btn {
   font: inherit;
   font-size: 0.875rem;
