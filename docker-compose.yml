@@ -67,7 +67,7 @@ services:
       pocketbase:
         condition: service_healthy
       ocr:
-        condition: service_started
+        condition: service_healthy
     environment:
       POCKETBASE_URL: http://pocketbase:8090
       POLL_INTERVAL_MS: "5000"

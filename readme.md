@@ -70,17 +70,18 @@ Dat doet: `git pull`, `docker compose up -d --build`, PocketBase-migraties (o.a.
 3. Test vanaf de client-PC in de browser: `http://<server-ip>/api/health`.
 4. In de Windows-client: **zelfde basis-URL** (geen `:3000` als de site op 80 staat). Gebruik **Test / zoek server** — de client probeert ook poort 80 en 3000.
 
-Collecties komen uit `pocketbase/pb_migrations/`. Bij elke start voert PocketBase **`migrate up`** uit. Bestaande server na OCR-update:
+Collecties komen uit `pocketbase/pb_migrations/` (toegepast via `scripts/update.sh` / `pb-migrate.sh`).
+
+Bij de eerste OCR-start wordt de image `gunthercox/ocr-service` gedownload; reken op extra RAM/CPU. In de galerij zie je badges (**Bezig…**, **Gelukt**, **Geen tekst**, **Mislukt**). Met **OCR aan** verwerkt de analyzer ook oudere shots zonder tekst (backfill, enkele per poll).
+
+Controle op de server:
 
 ```bash
-cd /opt/snapzilla
-bash scripts/pb-migrate.sh
-docker compose up -d --build web
+docker compose ps
+docker compose logs -f analyzer --tail=50
 ```
 
-Bij de eerste start wordt de OCR-image (`gunthercox/ocr-service`) gedownload; reken op extra RAM/CPU tijdens analyse. Bestaande screenshots krijgen geen OCR retroactief — alleen nieuwe uploads na deze update (of na reset van `analyzed`).
-
-Na een update: herstart PocketBase zodat migratie `snapzilla_settings` draait (collectie voor de OCR-knop). Zie PocketBase logs als de knop **OCR** niet verschijnt.
+Zie `[analyze]` / `[ocr-backfill]` en `ocr=done` of `ocr=failed`. Draait `snapzilla-analyzer` niet, dan blijft alles op **Bezig…**.
 
 ### OCR uitschakelen
 
