@@ -1104,6 +1104,56 @@ body {
   margin-top: 0.5rem;
 }
 
+.ocr-key-warning {
+  border-left: 3px solid var(--warning);
+  padding-left: 0.65rem;
+}
+
+.ocr-api-key-form {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.ocr-api-key-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
+.ocr-model-test-row {
+  margin-bottom: 0.75rem;
+}
+
+.ocr-feedback {
+  margin-bottom: 0.75rem;
+  padding: 0.55rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.ocr-feedback-success {
+  border-color: rgba(52, 211, 153, 0.45);
+  background: rgba(52, 211, 153, 0.12);
+  color: #6ee7b7;
+}
+
+.ocr-feedback-error {
+  border-color: rgba(248, 113, 113, 0.45);
+  background: rgba(248, 113, 113, 0.12);
+  color: #fca5a5;
+}
+
+.ocr-feedback-info {
+  border-color: rgba(107, 159, 255, 0.35);
+  background: rgba(107, 159, 255, 0.1);
+  color: var(--text-muted);
+}
+
 .btn {
   font: inherit;
   font-size: 0.875rem;

@@ -74,7 +74,7 @@ function describeOcr(item) {
       status: "no_key",
       label: "Geen API-key",
       detail:
-        "Zet OPENROUTER_API_KEY in /opt/snapzilla/.env en voer docker compose up -d --build analyzer uit.",
+        "Open **Model …** in de header en sla je OpenRouter API-key op (of zet OPENROUTER_API_KEY in .env).",
     };
   }
   if (st === "skipped") {
@@ -511,6 +511,136 @@ let snapzillaSettings = null;
 let snapzillaSettingsMissing = false;
 /** @type {{ id: string, name: string }[] | null} */
 let openRouterCatalogCache = null;
+/** @type {{ text: string, type: string }} */
+let ocrModalFeedback = { text: "", type: "info" };
+
+const OCR_TEST_TINY_PNG =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+
+function setOcrFeedback(text, type = "info") {
+  ocrModalFeedback = { text: text || "", type };
+  const el = $("ocrFeedback");
+  if (!el) return;
+  el.hidden = !text;
+  el.textContent = text;
+  el.className = text ? `ocr-feedback ocr-feedback-${type}` : "ocr-feedback";
+}
+
+function applyOcrFeedbackToDom() {
+  setOcrFeedback(ocrModalFeedback.text, ocrModalFeedback.type);
+}
+
+function parseOpenRouterErrorBody(raw, status) {
+  try {
+    const j = JSON.parse(raw);
+    const msg = j.error?.message || j.error || j.message;
+    if (msg) return String(msg);
+  } catch {
+    /* ignore */
+  }
+  return raw?.slice(0, 200) || `HTTP ${status}`;
+}
+
+function formatOpenRouterKeyCheck(json) {
+  const data = json.data || json;
+  const parts = [];
+  if (data.label) parts.push(String(data.label));
+  if (data.limit != null) parts.push(`limiet ${data.limit}`);
+  if (data.usage != null) parts.push(`gebruik ${data.usage}`);
+  if (data.is_free_tier != null) {
+    parts.push(data.is_free_tier ? "gratis tier" : "betaald");
+  }
+  return parts.length ? parts.join(" · ") : "Key geaccepteerd door OpenRouter";
+}
+
+async function testOpenRouterKey(apiKey) {
+  const res = await fetch("/openrouter/auth/key", {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "HTTP-Referer": window.location.origin,
+      "X-Title": "Snapzilla",
+    },
+  });
+  const raw = await res.text();
+  if (!res.ok) {
+    throw new Error(parseOpenRouterErrorBody(raw, res.status));
+  }
+  return raw ? JSON.parse(raw) : {};
+}
+
+async function resolveOpenRouterKeyForTest() {
+  const input = $("ocrApiKeyInput")?.value?.trim();
+  if (input) return input;
+  if (!snapzillaSettings?.id) throw new Error("Instellingen niet geladen");
+  if (!openRouterKeyConfigured()) {
+    throw new Error("Plak eerst een API-key in het veld");
+  }
+  const res = await fetch(
+    `${API}/collections/${SETTINGS_COLLECTION}/records/${snapzillaSettings.id}`,
+  );
+  if (!res.ok) throw new Error(await res.text());
+  const raw = await res.json();
+  const key = String(raw.openrouter_api_key || "").trim();
+  if (!key) throw new Error("Geen opgeslagen key — plak een key en sla op");
+  return key;
+}
+
+async function testOpenRouterVisionModel(apiKey, modelId) {
+  const res = await fetch("/openrouter/chat/completions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": window.location.origin,
+      "X-Title": "Snapzilla",
+    },
+    body: JSON.stringify({
+      model: modelId,
+      temperature: 0,
+      max_tokens: 16,
+      messages: [
+        {
+          role: "user",
+          content: [
+            {
+              type: "text",
+              text: 'Lees de afbeelding. Antwoord alleen met het woord OK (geen andere tekst).',
+            },
+            { type: "image_url", image_url: { url: OCR_TEST_TINY_PNG } },
+          ],
+        },
+      ],
+    }),
+  });
+  const raw = await res.text();
+  if (!res.ok) {
+    throw new Error(parseOpenRouterErrorBody(raw, res.status));
+  }
+  const json = raw ? JSON.parse(raw) : {};
+  const reply = json.choices?.[0]?.message?.content?.trim() || "";
+  return reply || "(leeg antwoord — model reageerde wel)";
+}
+
+async function runOpenRouterKeyTest() {
+  setOcrFeedback("API-key testen bij OpenRouter…", "info");
+  const apiKey = await resolveOpenRouterKeyForTest();
+  const json = await testOpenRouterKey(apiKey);
+  setOcrFeedback(`Key OK — ${formatOpenRouterKeyCheck(json)}`, "success");
+  showToast("OpenRouter API-key is geldig");
+}
+
+async function runOcrPipelineTest() {
+  setOcrFeedback("Key en vision-model testen…", "info");
+  const apiKey = await resolveOpenRouterKeyForTest();
+  const keyJson = await testOpenRouterKey(apiKey);
+  const model = activeOcrModelId();
+  const reply = await testOpenRouterVisionModel(apiKey, model);
+  setOcrFeedback(
+    `OCR-test gelukt — ${formatOpenRouterKeyCheck(keyJson)} · model ${shortModelLabel(model)} antwoordde: “${reply.slice(0, 80)}”`,
+    "success",
+  );
+  showToast("OCR-test geslaagd — analyzer zou moeten werken");
+}
 
 function normalizeOcrModels(raw) {
   if (!Array.isArray(raw)) return DEFAULT_OCR_MODELS.map((m) => ({ ...m }));
@@ -544,6 +674,35 @@ function shortModelLabel(modelId) {
   return hit?.name || modelId.split("/").pop() || modelId;
 }
 
+/** Strip full API key from client memory after load/save. */
+function sanitizeSettingsRecord(record) {
+  if (!record) return null;
+  const copy = { ...record };
+  const hadKey = Boolean(String(copy.openrouter_api_key || "").trim());
+  if ("openrouter_api_key" in copy) delete copy.openrouter_api_key;
+  copy._openrouterKeyConfigured =
+    hadKey || Boolean(String(copy.openrouter_api_key_tail || "").trim());
+  return copy;
+}
+
+function openRouterKeyConfigured() {
+  return Boolean(
+    snapzillaSettings?._openrouterKeyConfigured ||
+      snapzillaSettings?.openrouter_api_key_tail,
+  );
+}
+
+function formatOpenRouterKeyStatus() {
+  const tail = snapzillaSettings?.openrouter_api_key_tail;
+  if (openRouterKeyConfigured() && tail) {
+    return `Key ingesteld (…${tail}) — analyzer gebruikt deze key.`;
+  }
+  if (openRouterKeyConfigured()) {
+    return "Key ingesteld — analyzer gebruikt deze key.";
+  }
+  return "Nog geen key in Snapzilla — optioneel ook via .env (OPENROUTER_API_KEY).";
+}
+
 async function loadSnapzillaSettings() {
   snapzillaSettingsMissing = false;
   try {
@@ -557,7 +716,7 @@ async function loadSnapzillaSettings() {
     if (!res.ok) return null;
     const json = await res.json();
     if (json.items?.length) {
-      snapzillaSettings = json.items[0];
+      snapzillaSettings = sanitizeSettingsRecord(json.items[0]);
       return snapzillaSettings;
     }
     const createRes = await fetch(
@@ -573,7 +732,7 @@ async function loadSnapzillaSettings() {
       },
     );
     if (!createRes.ok) return null;
-    snapzillaSettings = await createRes.json();
+    snapzillaSettings = sanitizeSettingsRecord(await createRes.json());
     return snapzillaSettings;
   } catch {
     return null;
@@ -594,11 +753,44 @@ async function patchSnapzillaSettings(payload) {
     },
   );
   if (!res.ok) throw new Error(await res.text());
-  const updated = await res.json();
+  const updated = sanitizeSettingsRecord(await res.json());
   snapzillaSettings = updated;
   updateOcrToggleButton();
   renderOcrModelDialog();
   return updated;
+}
+
+async function saveOpenRouterApiKey(key) {
+  const trimmed = key.trim();
+  if (!trimmed) throw new Error("Voer een OpenRouter API-key in");
+  setOcrFeedback("Key testen vóór opslaan…", "info");
+  try {
+    const check = await testOpenRouterKey(trimmed);
+    setOcrFeedback(`Key gevalideerd — ${formatOpenRouterKeyCheck(check)}`, "info");
+  } catch (err) {
+    setOcrFeedback(`Key geweigerd door OpenRouter: ${err.message}`, "error");
+    throw new Error(`Key test mislukt: ${err.message}`);
+  }
+  const tail = trimmed.length >= 4 ? trimmed.slice(-4) : trimmed;
+  await patchSnapzillaSettings({
+    openrouter_api_key: trimmed,
+    openrouter_api_key_tail: tail,
+  });
+  setOcrFeedback(
+    `Key opgeslagen (…${tail}) en gevalideerd bij OpenRouter — klaar voor OCR.`,
+    "success",
+  );
+  showToast("OpenRouter API-key opgeslagen");
+}
+
+async function clearOpenRouterApiKey() {
+  if (!confirm("OpenRouter API-key uit Snapzilla wissen?")) return;
+  await patchSnapzillaSettings({
+    openrouter_api_key: "",
+    openrouter_api_key_tail: "",
+  });
+  setOcrFeedback("API-key gewist uit Snapzilla.", "info");
+  showToast("API-key gewist");
 }
 
 async function setActiveOcrModel(modelId) {
@@ -609,6 +801,7 @@ async function setActiveOcrModel(modelId) {
     models = [...models, { id, name: id }];
   }
   await patchSnapzillaSettings({ ocr_model: id, ocr_models: models });
+  setOcrFeedback(`Actief model: ${shortModelLabel(id)} (${id})`, "success");
   showToast(`OCR-model: ${shortModelLabel(id)}`);
 }
 
@@ -628,6 +821,7 @@ async function addInstalledOcrModel(id, name) {
     ocr_models: models,
     ocr_model: modelId,
   });
+  setOcrFeedback(`Model geïnstalleerd en actief: ${shortModelLabel(modelId)}`, "success");
   showToast(`Model geïnstalleerd: ${shortModelLabel(modelId)}`);
 }
 
@@ -722,11 +916,21 @@ function renderOcrModelDialog() {
   const sel = $("ocrModelSelect");
   const list = $("ocrInstalledList");
   const modelBtn = $("ocrModelBtn");
+  const keyStatus = $("ocrApiKeyStatus");
+  const keyInput = $("ocrApiKeyInput");
   if (!snapzillaSettings || snapzillaSettingsMissing) {
     modelBtn?.setAttribute("hidden", "");
     return;
   }
   modelBtn?.removeAttribute("hidden");
+
+  if (keyStatus) keyStatus.textContent = formatOpenRouterKeyStatus();
+  if (keyInput && document.activeElement !== keyInput) {
+    keyInput.value = "";
+    keyInput.placeholder = openRouterKeyConfigured()
+      ? "Nieuwe key plakken om te vervangen"
+      : "Plak je OpenRouter key (sk-or-…)";
+  }
 
   const models = installedOcrModels();
   const active = activeOcrModelId();
@@ -768,11 +972,18 @@ function renderOcrModelDialog() {
       list.appendChild(li);
     }
   }
+  applyOcrFeedbackToDom();
 }
 
 function openOcrModelModal() {
   if (!snapzillaSettings) return;
   renderOcrModelDialog();
+  if (openRouterKeyConfigured()) {
+    setOcrFeedback(
+      "Tip: gebruik OCR-test om key + vision-model te controleren voordat je screenshots uploadt.",
+      "info",
+    );
+  }
   $("ocrModelModal")?.showModal();
 }
 
@@ -1898,6 +2109,30 @@ async function init() {
   renderOcrModelDialog();
   $("ocrModelBtn")?.addEventListener("click", () => openOcrModelModal());
   $("ocrModelCloseBtn")?.addEventListener("click", () => $("ocrModelModal")?.close());
+  $("ocrApiKeyForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      await saveOpenRouterApiKey($("ocrApiKeyInput")?.value || "");
+      $("ocrApiKeyInput").value = "";
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+  $("ocrApiKeyClearBtn")?.addEventListener("click", () => {
+    void clearOpenRouterApiKey().catch((err) => showToast(err.message, true));
+  });
+  $("ocrApiKeyTestBtn")?.addEventListener("click", () => {
+    void runOpenRouterKeyTest().catch((err) => {
+      setOcrFeedback(err.message, "error");
+      showToast(err.message, true);
+    });
+  });
+  $("ocrPipelineTestBtn")?.addEventListener("click", () => {
+    void runOcrPipelineTest().catch((err) => {
+      setOcrFeedback(`OCR-test mislukt: ${err.message}`, "error");
+      showToast(err.message, true);
+    });
+  });
   $("ocrModelSelect")?.addEventListener("change", async (e) => {
     try {
       await setActiveOcrModel(e.target.value);
