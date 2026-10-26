@@ -46,6 +46,15 @@
         >
           OCR …
         </button>
+        <button
+          type="button"
+          class="btn btn-ghost btn-sm"
+          id="ocrModelBtn"
+          hidden
+          title="OpenRouter-model kiezen en installeren"
+        >
+          Model …
+        </button>
         <button type="button" class="btn btn-ghost" id="refreshBtn" title="Ververs">
           Ververs
         </button>
@@ -275,6 +284,61 @@
           <button type="submit" class="btn btn-primary">Opslaan</button>
         </div>
       </form>
+    </dialog>
+
+    <dialog class="modal" id="ocrModelModal">
+      <div class="modal-box ocr-model-modal">
+        <h2>OCR-model (OpenRouter)</h2>
+        <p class="hint">
+          API-key staat op de server in <code>.env</code> (<code>OPENROUTER_API_KEY</code>).
+          Hier kies je welk vision-model tekst uit screenshots haalt.
+        </p>
+        <label class="field">
+          <span>Actief model</span>
+          <select id="ocrModelSelect" class="input"></select>
+        </label>
+        <div class="ocr-installed-block">
+          <h3 class="ocr-subheading">Geïnstalleerde modellen</h3>
+          <ul class="ocr-model-list" id="ocrInstalledList"></ul>
+        </div>
+        <form id="ocrAddModelForm" class="ocr-add-form">
+          <h3 class="ocr-subheading">Model installeren</h3>
+          <label class="field">
+            <span>OpenRouter model-id</span>
+            <input
+              type="text"
+              id="ocrAddModelId"
+              class="input"
+              placeholder="bijv. google/gemini-2.0-flash-001"
+              autocomplete="off"
+              required
+            />
+          </label>
+          <label class="field">
+            <span>Weergavenaam (optioneel)</span>
+            <input type="text" id="ocrAddModelName" class="input" maxlength="120" autocomplete="off" />
+          </label>
+          <button type="submit" class="btn btn-primary btn-sm">Toevoegen aan lijst</button>
+        </form>
+        <section class="ocr-catalog-block">
+          <h3 class="ocr-subheading">Catalogus OpenRouter</h3>
+          <div class="ocr-catalog-search">
+            <input
+              type="search"
+              id="ocrCatalogSearch"
+              class="input"
+              placeholder="Zoek vision-model…"
+              autocomplete="off"
+            />
+            <button type="button" class="btn btn-ghost btn-sm" id="ocrCatalogLoadBtn">Laden</button>
+          </div>
+          <p class="hint" id="ocrCatalogHint">Laad modellen en filter op afbeelding/vision.</p>
+          <ul class="ocr-catalog-list" id="ocrCatalogList"></ul>
+        </section>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-ghost" id="ocrModelCloseBtn">Sluiten</button>
+        </div>
+      </div>
     </dialog>
 
     <dialog class="modal" id="deleteAlbumModal">

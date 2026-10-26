@@ -8,7 +8,7 @@ Dark-mode webplatform voor het **opslaan**, **organiseren**, **bekijken** en **a
 |-----------|-----|
 | **PocketBase** | Bestanden + metadata (`screenshots`, `albums`) |
 | **Web (nginx)** | Gallery UI + proxy `/api` → PocketBase |
-| **Analyzer** | Achtergrond: afmetingen, pHash, kleuren |
+| **Analyzer** | Achtergrond: afmetingen, pHash, kleuren, tekst via **OpenRouter** (vision) |
 | **Windows-client** | Systeemvak, hotkeys, upload naar REST API |
 
 ## Features
@@ -35,7 +35,7 @@ Dark-mode webplatform voor het **opslaan**, **organiseren**, **bekijken** en **a
 - Breedte/hoogte, bestandsgrootte
 - Dominante kleur
 - Perceptual hash voor duplicaten
-- **OCR** (Tesseract, Nederlands + Engels) via aparte container `ocr`; tekst in `ocr_text`, doorzoekbaar in de gallery. In de web-UI: knop **OCR aan/uit** (alleen nieuwe uploads).
+- **Tekst uit screenshots** via OpenRouter (vision-model); opgeslagen in `ocr_text`, doorzoekbaar in de gallery. Web-UI: knop **OCR aan/uit**. API-key alleen op de server in `.env` (`OPENROUTER_API_KEY`).
 
 ## Snel starten (Docker)
 
@@ -45,6 +45,7 @@ Vergelijkbaar met [fileshare](https://github.com/s4ndyp/fileshare): één `docke
 git clone https://github.com/s4ndyp/snapzilla.git
 cd snapzilla
 cp .env.example .env
+# Vul OPENROUTER_API_KEY in .env voor tekstherkenning
 docker compose up -d --build
 ```
 
@@ -72,20 +73,32 @@ Dat doet: `git pull`, `docker compose up -d --build`, PocketBase-migraties (o.a.
 
 Collecties komen uit `pocketbase/pb_migrations/` (toegepast via `scripts/update.sh` / `pb-migrate.sh`).
 
-Bij de eerste OCR-start wordt de image `gunthercox/ocr-service` gedownload; reken op extra RAM/CPU. In de galerij zie je badges (**Bezig…**, **Gelukt**, **Geen tekst**, **Mislukt**). Met **OCR aan** verwerkt de analyzer ook oudere shots zonder tekst (backfill, enkele per poll).
+### Tekst / OCR (OpenRouter)
 
-Controle op de server:
+In `/opt/snapzilla/.env`:
+
+```env
+OPENROUTER_API_KEY=sk-or-v1-...
+# optioneel fallback als er nog geen model in de UI staat:
+# OPENROUTER_MODEL=google/gemini-2.0-flash-001
+```
+
+In de web-UI: knop **Model …** → actief model kiezen, handmatig installeren, of uit de **OpenRouter-catalogus** (vision-modellen). Keuze wordt in PocketBase opgeslagen (`snapzilla_settings`).
+
+Daarna `bash scripts/update.sh` of `docker compose up -d --build analyzer`.
+
+In de galerij: badges **Bezig…** / **OCR…** / **Gelukt** / **Geen tekst** / **Mislukt** / **Geen API-key**. Afmetingen en pHash worden direct gezet (`analyzed=true`); tekst volgt via OpenRouter (enkele seconden). Met **OCR aan** worden ook oudere shots zonder tekst opgepikt (backfill).
 
 ```bash
-docker compose ps
+docker compose ps          # snapzilla-analyzer moet Up zijn
 docker compose logs -f analyzer --tail=50
 ```
 
-Zie `[analyze]` / `[ocr-backfill]` en `ocr=done` of `ocr=failed`. Draait `snapzilla-analyzer` niet, dan blijft alles op **Bezig…**.
+Verwacht o.a. `[ocr] OpenRouter model=…` en `[analyze] … ocr=done`. Blijft **Bezig…** staan zonder **OCR…**, dan draait de analyzer niet (vroeger blokkeerde een kapotte `ocr`-container de hele stack).
 
 ### OCR uitschakelen
 
-Haal de `ocr`-service uit `docker-compose.yml` weg en laat `OCR_SERVICE_URL` leeg in de `analyzer`-omgeving.
+Knop **OCR uit** in de web-UI, of laat `OPENROUTER_API_KEY` leeg (analyzer slaat tekst over; screenshots worden wel geanalyseerd).
 
 ## Windows-client
 

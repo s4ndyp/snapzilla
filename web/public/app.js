@@ -53,14 +53,30 @@ function isRecordAnalyzed(item) {
 
 /** @returns {{ status: string, label: string, detail: string }} */
 function describeOcr(item) {
+  const st = String(item.ocr_status || "").toLowerCase();
   if (!isRecordAnalyzed(item)) {
     return {
       status: "pending",
       label: "Bezig…",
-      detail: "Screenshot wordt geanalyseerd; OCR volgt zodra de analyzer klaar is.",
+      detail:
+        "Screenshot wordt geanalyseerd. Draait snapzilla-analyzer niet? docker compose ps / logs analyzer.",
     };
   }
-  const st = String(item.ocr_status || "").toLowerCase();
+  if (st === "pending") {
+    return {
+      status: "pending",
+      label: "OCR…",
+      detail: "Tekst wordt via OpenRouter uit de afbeelding gehaald.",
+    };
+  }
+  if (st === "no_key") {
+    return {
+      status: "no_key",
+      label: "Geen API-key",
+      detail:
+        "Zet OPENROUTER_API_KEY in /opt/snapzilla/.env en voer docker compose up -d --build analyzer uit.",
+    };
+  }
   if (st === "skipped") {
     return {
       status: "skipped",
@@ -73,7 +89,7 @@ function describeOcr(item) {
       status: "failed",
       label: "Mislukt",
       detail:
-        "OCR is mislukt. Controleer of de containers snapzilla-analyzer en snapzilla-ocr draaien (docker compose ps).",
+        "OpenRouter-OCR mislukt. Controleer OPENROUTER_API_KEY, saldo en docker compose logs analyzer.",
     };
   }
   if (item.ocr_text) {
@@ -95,11 +111,12 @@ function describeOcr(item) {
 
 function itemWantsAnalysisPoll(item) {
   if (!isRecordAnalyzed(item)) return true;
-  if (item.ocr_text) return false;
   const st = String(item.ocr_status || "").toLowerCase();
+  if (st === "pending") return true;
+  if (item.ocr_text) return false;
   if (st === "done" || st === "empty") return false;
   if (snapzillaSettings && snapzillaSettings.ocr_enabled === false) return false;
-  return st === "skipped" || st === "failed" || st === "";
+  return st === "skipped" || st === "failed" || st === "no_key" || st === "";
 }
 
 let analysisPollTimer = null;
@@ -480,9 +497,52 @@ async function createRecord(formData) {
   return res.json();
 }
 
-/** @type {{ id: string, ocr_enabled?: boolean } | null} */
+const DEFAULT_OCR_MODEL = "google/gemini-2.0-flash-001";
+const DEFAULT_OCR_MODELS = [
+  { id: "google/gemini-2.0-flash-001", name: "Gemini 2.0 Flash" },
+  { id: "google/gemini-2.5-flash-preview", name: "Gemini 2.5 Flash (preview)" },
+  { id: "openai/gpt-4o-mini", name: "GPT-4o mini" },
+  { id: "anthropic/claude-3.5-haiku", name: "Claude 3.5 Haiku" },
+  { id: "qwen/qwen-2.5-vl-72b-instruct", name: "Qwen 2.5 VL 72B" },
+];
+
+/** @type {{ id: string, ocr_enabled?: boolean, ocr_model?: string, ocr_models?: unknown } | null} */
 let snapzillaSettings = null;
 let snapzillaSettingsMissing = false;
+/** @type {{ id: string, name: string }[] | null} */
+let openRouterCatalogCache = null;
+
+function normalizeOcrModels(raw) {
+  if (!Array.isArray(raw)) return DEFAULT_OCR_MODELS.map((m) => ({ ...m }));
+  const out = [];
+  for (const item of raw) {
+    if (typeof item === "string" && item.trim()) {
+      out.push({ id: item.trim(), name: item.trim() });
+    } else if (item && typeof item.id === "string" && item.id.trim()) {
+      out.push({
+        id: item.id.trim(),
+        name: String(item.name || item.id).trim().slice(0, 120),
+      });
+    }
+  }
+  return out.length ? out : DEFAULT_OCR_MODELS.map((m) => ({ ...m }));
+}
+
+function installedOcrModels() {
+  return normalizeOcrModels(snapzillaSettings?.ocr_models);
+}
+
+function activeOcrModelId() {
+  const id = snapzillaSettings?.ocr_model?.trim();
+  if (id) return id;
+  const list = installedOcrModels();
+  return list[0]?.id || DEFAULT_OCR_MODEL;
+}
+
+function shortModelLabel(modelId) {
+  const hit = installedOcrModels().find((m) => m.id === modelId);
+  return hit?.name || modelId.split("/").pop() || modelId;
+}
 
 async function loadSnapzillaSettings() {
   snapzillaSettingsMissing = false;
@@ -505,7 +565,11 @@ async function loadSnapzillaSettings() {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ocr_enabled: true }),
+        body: JSON.stringify({
+          ocr_enabled: true,
+          ocr_model: DEFAULT_OCR_MODEL,
+          ocr_models: DEFAULT_OCR_MODELS,
+        }),
       },
     );
     if (!createRes.ok) return null;
@@ -516,7 +580,7 @@ async function loadSnapzillaSettings() {
   }
 }
 
-async function setOcrEnabled(enabled) {
+async function patchSnapzillaSettings(payload) {
   if (!snapzillaSettings) {
     const loaded = await loadSnapzillaSettings();
     if (!loaded) throw new Error("Instellingen niet beschikbaar");
@@ -526,12 +590,198 @@ async function setOcrEnabled(enabled) {
     {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ocr_enabled: enabled }),
+      body: JSON.stringify(payload),
     },
   );
   if (!res.ok) throw new Error(await res.text());
-  snapzillaSettings.ocr_enabled = enabled;
+  const updated = await res.json();
+  snapzillaSettings = updated;
   updateOcrToggleButton();
+  renderOcrModelDialog();
+  return updated;
+}
+
+async function setActiveOcrModel(modelId) {
+  const id = modelId.trim();
+  if (!id) return;
+  let models = installedOcrModels();
+  if (!models.some((m) => m.id === id)) {
+    models = [...models, { id, name: id }];
+  }
+  await patchSnapzillaSettings({ ocr_model: id, ocr_models: models });
+  showToast(`OCR-model: ${shortModelLabel(id)}`);
+}
+
+async function addInstalledOcrModel(id, name) {
+  const modelId = id.trim();
+  if (!modelId) throw new Error("Model-id is verplicht");
+  const models = installedOcrModels();
+  if (models.some((m) => m.id === modelId)) {
+    await setActiveOcrModel(modelId);
+    return;
+  }
+  models.push({
+    id: modelId,
+    name: (name || modelId).trim().slice(0, 120),
+  });
+  await patchSnapzillaSettings({
+    ocr_models: models,
+    ocr_model: modelId,
+  });
+  showToast(`Model geïnstalleerd: ${shortModelLabel(modelId)}`);
+}
+
+async function removeInstalledOcrModel(modelId) {
+  const models = installedOcrModels().filter((m) => m.id !== modelId);
+  if (!models.length) throw new Error("Minstens één model houden");
+  let nextActive = activeOcrModelId();
+  if (nextActive === modelId) nextActive = models[0].id;
+  await patchSnapzillaSettings({ ocr_models: models, ocr_model: nextActive });
+  showToast("Model verwijderd uit lijst");
+}
+
+function modelSupportsVision(entry) {
+  const mods = entry?.architecture?.input_modalities;
+  if (Array.isArray(mods)) {
+    return mods.some((m) => String(m).toLowerCase().includes("image"));
+  }
+  const id = String(entry?.id || "").toLowerCase();
+  return /gemini|gpt-4|claude|qwen|vl|vision|llava|pixtral|moondream/i.test(id);
+}
+
+async function fetchOpenRouterCatalog() {
+  if (openRouterCatalogCache) return openRouterCatalogCache;
+  const res = await fetch("/openrouter/models");
+  if (!res.ok) throw new Error(`OpenRouter catalogus (${res.status})`);
+  const json = await res.json();
+  const items = (json.data || [])
+    .filter(modelSupportsVision)
+    .map((m) => ({
+      id: m.id,
+      name: m.name || m.id,
+    }))
+    .sort((a, b) => a.name.localeCompare(b.name, "nl"));
+  openRouterCatalogCache = items;
+  return items;
+}
+
+function renderOcrCatalogList(filter = "") {
+  const listEl = $("ocrCatalogList");
+  const hint = $("ocrCatalogHint");
+  if (!listEl) return;
+  listEl.innerHTML = "";
+  if (!openRouterCatalogCache) {
+    if (hint) hint.textContent = "Laad modellen en filter op afbeelding/vision.";
+    return;
+  }
+  const q = filter.trim().toLowerCase();
+  const items = openRouterCatalogCache.filter(
+    (m) =>
+      !q ||
+      m.id.toLowerCase().includes(q) ||
+      m.name.toLowerCase().includes(q),
+  );
+  if (hint) {
+    hint.textContent = items.length
+      ? `${items.length} vision-modellen (max 40 getoond)`
+      : "Geen modellen voor deze zoekterm.";
+  }
+  for (const m of items.slice(0, 40)) {
+    const li = document.createElement("li");
+    li.className = "ocr-catalog-item";
+    const installed = installedOcrModels().some((x) => x.id === m.id);
+    const meta = document.createElement("div");
+    meta.className = "ocr-catalog-meta";
+    const strong = document.createElement("strong");
+    strong.textContent = m.name;
+    const code = document.createElement("code");
+    code.className = "ocr-model-id";
+    code.textContent = m.id;
+    meta.append(strong, code);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "btn btn-ghost btn-sm";
+    btn.textContent = installed ? "Activeren" : "Installeren";
+    btn.addEventListener("click", async () => {
+      try {
+        btn.disabled = true;
+        await addInstalledOcrModel(m.id, m.name);
+        renderOcrCatalogList($("ocrCatalogSearch")?.value || "");
+      } catch (err) {
+        showToast(err.message, true);
+      } finally {
+        btn.disabled = false;
+      }
+    });
+    li.append(meta, btn);
+    listEl.appendChild(li);
+  }
+}
+
+function renderOcrModelDialog() {
+  const sel = $("ocrModelSelect");
+  const list = $("ocrInstalledList");
+  const modelBtn = $("ocrModelBtn");
+  if (!snapzillaSettings || snapzillaSettingsMissing) {
+    modelBtn?.setAttribute("hidden", "");
+    return;
+  }
+  modelBtn?.removeAttribute("hidden");
+
+  const models = installedOcrModels();
+  const active = activeOcrModelId();
+  modelBtn.textContent = shortModelLabel(active);
+
+  if (sel) {
+    sel.innerHTML = models
+      .map(
+        (m) =>
+          `<option value="${escapeHtml(m.id)}"${m.id === active ? " selected" : ""}>${escapeHtml(m.name)}</option>`,
+      )
+      .join("");
+  }
+
+  if (list) {
+    list.innerHTML = "";
+    for (const m of models) {
+      const li = document.createElement("li");
+      li.className = "ocr-model-list-item";
+      const isActive = m.id === active;
+      li.innerHTML = `
+        <div>
+          <span class="ocr-model-list-name">${escapeHtml(m.name)}${isActive ? " · actief" : ""}</span>
+          <code class="ocr-model-id">${escapeHtml(m.id)}</code>
+        </div>
+        <button type="button" class="btn btn-ghost btn-sm ocr-model-remove" title="Verwijderen">×</button>
+      `;
+      li.querySelector(".ocr-model-remove")?.addEventListener("click", async () => {
+        if (models.length <= 1) {
+          showToast("Minstens één model houden", true);
+          return;
+        }
+        try {
+          await removeInstalledOcrModel(m.id);
+        } catch (err) {
+          showToast(err.message, true);
+        }
+      });
+      list.appendChild(li);
+    }
+  }
+}
+
+function openOcrModelModal() {
+  if (!snapzillaSettings) return;
+  renderOcrModelDialog();
+  $("ocrModelModal")?.showModal();
+}
+
+async function setOcrEnabled(enabled) {
+  if (!snapzillaSettings) {
+    const loaded = await loadSnapzillaSettings();
+    if (!loaded) throw new Error("Instellingen niet beschikbaar");
+  }
+  await patchSnapzillaSettings({ ocr_enabled: enabled });
 }
 
 function updateOcrToggleButton() {
@@ -556,9 +806,11 @@ function updateOcrToggleButton() {
   btn.textContent = on ? "OCR aan" : "OCR uit";
   btn.setAttribute("aria-pressed", on ? "true" : "false");
   btn.classList.toggle("ocr-toggle-on", on);
+  const modelHint = shortModelLabel(activeOcrModelId());
   btn.title = on
-    ? "OCR aan voor nieuwe screenshots — klik om uit te zetten"
+    ? `OCR aan (${modelHint}) — klik om uit te zetten`
     : "OCR uit voor nieuwe screenshots — klik om aan te zetten";
+  renderOcrModelDialog();
 }
 
 async function createAlbum(name) {
@@ -1643,6 +1895,50 @@ async function init() {
 
   await loadSnapzillaSettings();
   updateOcrToggleButton();
+  renderOcrModelDialog();
+  $("ocrModelBtn")?.addEventListener("click", () => openOcrModelModal());
+  $("ocrModelCloseBtn")?.addEventListener("click", () => $("ocrModelModal")?.close());
+  $("ocrModelSelect")?.addEventListener("change", async (e) => {
+    try {
+      await setActiveOcrModel(e.target.value);
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+  $("ocrAddModelForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      await addInstalledOcrModel(
+        $("ocrAddModelId")?.value || "",
+        $("ocrAddModelName")?.value || "",
+      );
+      $("ocrAddModelId").value = "";
+      $("ocrAddModelName").value = "";
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+  $("ocrCatalogLoadBtn")?.addEventListener("click", async () => {
+    const btn = $("ocrCatalogLoadBtn");
+    const hint = $("ocrCatalogHint");
+    try {
+      btn.disabled = true;
+      if (hint) hint.textContent = "Catalogus laden…";
+      await fetchOpenRouterCatalog();
+      renderOcrCatalogList($("ocrCatalogSearch")?.value || "");
+    } catch (err) {
+      showToast(err.message, true);
+      if (hint) hint.textContent = "Laden mislukt — controleer internet op de server.";
+    } finally {
+      btn.disabled = false;
+    }
+  });
+  $("ocrCatalogSearch")?.addEventListener(
+    "input",
+    debounce(() => {
+      renderOcrCatalogList($("ocrCatalogSearch")?.value || "");
+    }, 250),
+  );
   if (snapzillaSettingsMissing) {
     showToast(
       "OCR-instellingen ontbreken — op de server: bash scripts/pb-migrate.sh",

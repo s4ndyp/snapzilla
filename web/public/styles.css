@@ -979,6 +979,11 @@ body {
   color: #450a0a;
 }
 
+.shot-ocr-no_key {
+  background: rgba(251, 191, 36, 0.95);
+  color: #422006;
+}
+
 .ocr-meta-dd {
   display: flex;
   flex-direction: column;
@@ -1015,6 +1020,11 @@ body {
   color: #f87171;
 }
 
+.ocr-pill-no_key {
+  background: rgba(251, 191, 36, 0.2);
+  color: #fbbf24;
+}
+
 .ocr-detail {
   font-size: 0.85rem;
   line-height: 1.45;
@@ -1028,6 +1038,70 @@ body {
   margin: 0;
   font-size: 0.75rem;
   color: var(--text-muted);
+}
+
+.ocr-model-modal {
+  max-width: 32rem;
+  max-height: min(90vh, 720px);
+  overflow: auto;
+}
+
+.ocr-subheading {
+  margin: 1rem 0 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.ocr-model-list,
+.ocr-catalog-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.ocr-model-list-item,
+.ocr-catalog-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-elevated);
+}
+
+.ocr-model-list-name {
+  display: block;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.ocr-model-id {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  word-break: break-all;
+}
+
+.ocr-catalog-search {
+  display: flex;
+  gap: 0.4rem;
+  margin-bottom: 0.35rem;
+}
+
+.ocr-catalog-meta strong {
+  display: block;
+  font-size: 0.82rem;
+}
+
+.ocr-add-form {
+  margin-top: 0.5rem;
 }
 
 .btn {
