@@ -48,17 +48,17 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
-Lokale compose-aanpassingen (poorten, etc.): gebruik `docker-compose.override.yml` (zie `docker-compose.override.example.yml`), **niet** het bewerkte `docker-compose.yml` committen of laten staan vóór `git pull`.
+Lokale poort/tweaks: `docker-compose.override.yml` (zie `docker-compose.override.example.yml`), niet `docker-compose.yml` handmatig wijzigen.
 
-**Server update** (fix “docker-compose.yml would be overwritten by merge”):
+### Server updaten (na merge naar `main`)
+
+Eén commando in de clone-map (bijv. `/opt/snapzilla`):
 
 ```bash
-cd /pad/naar/snapzilla
-bash scripts/update-from-git.sh
-docker compose up -d --build
+bash scripts/update.sh
 ```
 
-**Cursor Cloud Agent environment:** zet **install** op één regel: `bash .cursor/install.sh` (vervang oude `git pull` op regel ~24).
+Dat doet: `git pull`, `docker compose up -d --build`, PocketBase-migraties (o.a. OCR-instellingen). Daarna in de browser **Ctrl+F5**. De **Windows-client** hoeft niet opnieuw geïnstalleerd — alleen de server-URL blijft hetzelfde.
 
 - Web-UI: `http://<host>:3000` (of poort uit `.env`, bv. `80` → `http://<host>/`)
 - PocketBase admin (eerste setup): `http://<host>:3000/_/` (zelfde poort als de UI)
