@@ -267,6 +267,19 @@
       </form>
     </dialog>
 
+    <dialog class="modal" id="deleteAlbumModal">
+      <div class="modal-box">
+        <h2>Album verwijderen</h2>
+        <p class="hint" id="deleteAlbumHint">Weet je het zeker?</p>
+        <p class="hint">Screenshots zonder album blijven gewoon in je bibliotheek (zonder album-koppeling).</p>
+        <div class="modal-actions modal-actions-stack">
+          <button type="button" class="btn btn-danger" id="deleteAlbumAndShotsBtn">Album én screenshots verwijderen</button>
+          <button type="button" class="btn btn-primary" id="deleteAlbumOnlyBtn">Alleen album verwijderen</button>
+          <button type="button" class="btn btn-ghost" id="deleteAlbumCancelBtn">Annuleren</button>
+        </div>
+      </div>
+    </dialog>
+
     <footer class="footer">
       <span>Open server — geen login. PocketBase admin: <code>/_/</code></span>
       <a href="/client-setup.html" id="clientSetupLink">Windows-client</a>
