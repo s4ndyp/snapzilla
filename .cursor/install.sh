@@ -1,22 +1,10 @@
 #!/usr/bin/env bash
-# Cloud Agent / environment build: idempotent repo bootstrap.
+# Cloud Agent environment install — altijd via: bash .cursor/install.sh
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  git fetch origin main 2>/dev/null || git fetch origin 2>/dev/null || true
-
-  # Older env scripts sometimes patched docker-compose.yml; restore before pull.
-  if ! git diff --quiet -- docker-compose.yml 2>/dev/null; then
-    git restore --source=origin/main --staged --worktree docker-compose.yml 2>/dev/null \
-      || git checkout origin/main -- docker-compose.yml 2>/dev/null \
-      || git checkout -- docker-compose.yml 2>/dev/null \
-      || true
-  fi
-
-  git pull --ff-only origin main 2>/dev/null || true
-fi
+bash "$ROOT/.cursor/sync-main.sh"
 
 if [ -f "$ROOT/analyzer/package-lock.json" ]; then
   npm ci --prefix "$ROOT/analyzer" --omit=dev
