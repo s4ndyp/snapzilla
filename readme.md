@@ -48,6 +48,8 @@ cp .env.example .env
 docker compose up -d --build
 ```
 
+Lokale compose-aanpassingen (poorten, etc.): gebruik `docker-compose.override.yml` (zie `docker-compose.override.example.yml`), **niet** het bewerkte `docker-compose.yml` committen of laten staan vóór `git pull`.
+
 - Web-UI: `http://<host>:3000` (of poort uit `.env`, bv. `80` → `http://<host>/`)
 - PocketBase admin (eerste setup): `http://<host>:3000/_/` (zelfde poort als de UI)
 
