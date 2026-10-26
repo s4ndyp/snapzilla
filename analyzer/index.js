@@ -12,6 +12,10 @@ const OCR_LANG = process.env.OCR_LANG || "nld+eng";
 const OCR_TIMEOUT_MS = Number(process.env.OCR_TIMEOUT_MS) || 120_000;
 const OCR_MAX_WIDTH = Number(process.env.OCR_MAX_WIDTH) || 2000;
 const OCR_TEXT_MAX = 50_000;
+const SETTINGS_CACHE_MS = 3000;
+
+/** @type {{ value: boolean, ts: number }} */
+let ocrEnabledCache = { value: true, ts: 0 };
 
 async function pbFetch(path, options = {}) {
   const res = await fetch(`${PB}${path}`, options);
@@ -65,6 +69,26 @@ async function prepareOcrImage(buffer) {
   return pipeline.png({ compressionLevel: 6 }).toBuffer();
 }
 
+async function fetchOcrEnabledFromServer() {
+  if (Date.now() - ocrEnabledCache.ts < SETTINGS_CACHE_MS) {
+    return ocrEnabledCache.value;
+  }
+  try {
+    const res = await pbFetch(
+      "/api/collections/snapzilla_settings/records?perPage=1",
+    );
+    const json = await res.json();
+    const item = json.items?.[0];
+    const enabled = item ? item.ocr_enabled !== false : true;
+    ocrEnabledCache = { value: enabled, ts: Date.now() };
+    return enabled;
+  } catch (err) {
+    console.warn("[ocr] settings unreadable, default on:", err.message);
+    ocrEnabledCache = { value: true, ts: Date.now() };
+    return true;
+  }
+}
+
 async function runOcr(buffer) {
   if (!OCR_URL) return "";
 
@@ -110,7 +134,7 @@ async function analyzeRecord(record) {
   const colors = await extractColors(buffer);
 
   let ocrText = "";
-  if (OCR_URL) {
+  if (OCR_URL && (await fetchOcrEnabledFromServer())) {
     try {
       ocrText = await runOcr(buffer);
     } catch (err) {

@@ -96,6 +96,12 @@ body {
   color: var(--text-muted);
 }
 
+.ocr-toggle-btn.ocr-toggle-on {
+  background: var(--filter-pink-bg);
+  color: var(--filter-pink-text);
+  border: 1px solid var(--filter-pink-border);
+}
+
 .header-actions {
   margin-left: auto;
   display: flex;
