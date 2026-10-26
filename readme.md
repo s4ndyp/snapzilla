@@ -35,7 +35,7 @@ Dark-mode webplatform voor het **opslaan**, **organiseren**, **bekijken** en **a
 - Breedte/hoogte, bestandsgrootte
 - Dominante kleur
 - Perceptual hash voor duplicaten
-- **Tekst uit screenshots** via OpenRouter (vision-model); opgeslagen in `ocr_text`, doorzoekbaar in de gallery. Web-UI: knop **OCR aan/uit**. API-key alleen op de server in `.env` (`OPENROUTER_API_KEY`).
+- **Tekst uit screenshots** via OpenRouter (vision-model); opgeslagen in `ocr_text`, doorzoekbaar in de gallery. Web-UI: **OCR aan/uit**, **Model …** (model + API-key). Key kan in de GUI of via `.env` (`OPENROUTER_API_KEY`).
 
 ## Snel starten (Docker)
 

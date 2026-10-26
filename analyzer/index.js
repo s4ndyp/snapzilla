@@ -6,7 +6,7 @@ const PB = (process.env.POCKETBASE_URL || "http://pocketbase:8090").replace(
   "",
 );
 const POLL_MS = Number(process.env.POLL_INTERVAL_MS) || 5000;
-const OPENROUTER_API_KEY = (process.env.OPENROUTER_API_KEY || "").trim();
+const OPENROUTER_API_KEY_ENV = (process.env.OPENROUTER_API_KEY || "").trim();
 const OPENROUTER_MODEL_DEFAULT =
   process.env.OPENROUTER_MODEL || "google/gemini-2.0-flash-001";
 const OPENROUTER_BASE =
@@ -20,11 +20,12 @@ const VISION_MAX_WIDTH = Number(process.env.VISION_MAX_WIDTH) || 1600;
 const OCR_TEXT_MAX = 50_000;
 const SETTINGS_CACHE_MS = 3000;
 
-/** @type {{ ts: number, enabled: boolean, model: string }} */
+/** @type {{ ts: number, enabled: boolean, model: string, apiKey: string }} */
 let settingsCache = {
   ts: 0,
   enabled: true,
   model: OPENROUTER_MODEL_DEFAULT,
+  apiKey: OPENROUTER_API_KEY_ENV,
 };
 
 async function pbFetch(path, options = {}) {
@@ -93,17 +94,27 @@ async function fetchSnapzillaSettings() {
     const model =
       (typeof item?.ocr_model === "string" && item.ocr_model.trim()) ||
       OPENROUTER_MODEL_DEFAULT;
-    settingsCache = { enabled, model, ts: Date.now() };
+    const fromDb =
+      typeof item?.openrouter_api_key === "string"
+        ? item.openrouter_api_key.trim()
+        : "";
+    const apiKey = fromDb || OPENROUTER_API_KEY_ENV;
+    settingsCache = { enabled, model, apiKey, ts: Date.now() };
     return settingsCache;
   } catch (err) {
     console.warn("[ocr] settings unreadable, defaults:", err.message);
     settingsCache = {
       enabled: true,
       model: OPENROUTER_MODEL_DEFAULT,
+      apiKey: OPENROUTER_API_KEY_ENV,
       ts: Date.now(),
     };
     return settingsCache;
   }
+}
+
+async function resolveOpenRouterApiKey() {
+  return (await fetchSnapzillaSettings()).apiKey;
 }
 
 async function fetchOcrEnabledFromServer() {
@@ -121,7 +132,8 @@ Do not add markdown, quotes, or commentary.
 If there is no readable text, reply with exactly: [empty]`;
 
 async function runOpenRouterOcr(buffer, modelId) {
-  if (!OPENROUTER_API_KEY) {
+  const apiKey = await resolveOpenRouterApiKey();
+  if (!apiKey) {
     return { text: "", status: "no_key" };
   }
 
@@ -137,7 +149,7 @@ async function runOpenRouterOcr(buffer, modelId) {
     const res = await fetch(`${OPENROUTER_BASE}/chat/completions`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${OPENROUTER_API_KEY}`,
+        Authorization: `Bearer ${apiKey}`,
         "Content-Type": "application/json",
         "HTTP-Referer": "https://github.com/s4ndyp/snapzilla",
         "X-Title": "Snapzilla Analyzer",
@@ -181,7 +193,7 @@ async function runOpenRouterOcr(buffer, modelId) {
 async function runOcrForRecord(record, buffer) {
   const enabled = await fetchOcrEnabledFromServer();
   if (!enabled) return { text: "", status: "skipped" };
-  if (!OPENROUTER_API_KEY) return { text: "", status: "no_key" };
+  if (!(await resolveOpenRouterApiKey())) return { text: "", status: "no_key" };
 
   try {
     const model = await fetchOcrModelFromServer();
@@ -216,7 +228,7 @@ async function analyzeRecord(record) {
   const colors = await extractColors(buffer);
 
   const ocrWillRun =
-    OPENROUTER_API_KEY && (await fetchOcrEnabledFromServer());
+    (await resolveOpenRouterApiKey()) && (await fetchOcrEnabledFromServer());
 
   const body = new FormData();
   body.append("width", String(meta.width || 0));
@@ -227,7 +239,7 @@ async function analyzeRecord(record) {
   body.append("analyzed", "true");
   if (ocrWillRun) {
     body.append("ocr_status", "pending");
-  } else if (!OPENROUTER_API_KEY) {
+  } else if (!(await resolveOpenRouterApiKey())) {
     body.append("ocr_status", "no_key");
   } else {
     body.append("ocr_status", "skipped");
@@ -239,7 +251,11 @@ async function analyzeRecord(record) {
   await patchRecord(record.id, body);
 
   let ocrText = "";
-  let ocrStatus = ocrWillRun ? "pending" : !OPENROUTER_API_KEY ? "no_key" : "skipped";
+  let ocrStatus = ocrWillRun
+    ? "pending"
+    : !(await resolveOpenRouterApiKey())
+      ? "no_key"
+      : "skipped";
 
   if (ocrWillRun) {
     const ocrResult = await runOcrForRecord(record, buffer);
@@ -300,7 +316,8 @@ async function pollOnce() {
     }
   }
 
-  if (!OPENROUTER_API_KEY || !(await fetchOcrEnabledFromServer())) return;
+  if (!(await resolveOpenRouterApiKey()) || !(await fetchOcrEnabledFromServer()))
+    return;
 
   const backfillFilter = encodeURIComponent(
     'analyzed = true && ocr_text = "" && (ocr_status = "" || ocr_status = "skipped" || ocr_status = "failed" || ocr_status = "no_key")',
@@ -320,14 +337,15 @@ async function pollOnce() {
 
 async function main() {
   console.log(`Snapzilla analyzer → ${PB} (poll ${POLL_MS}ms)`);
-  if (OPENROUTER_API_KEY) {
-    const { model } = await fetchSnapzillaSettings();
+  const { model, apiKey } = await fetchSnapzillaSettings();
+  if (apiKey) {
+    const source = apiKey === OPENROUTER_API_KEY_ENV ? "env" : "database";
     console.log(
-      `[ocr] OpenRouter default=${OPENROUTER_MODEL_DEFAULT} active=${model}`,
+      `[ocr] OpenRouter active=${model} key=${source} (default=${OPENROUTER_MODEL_DEFAULT})`,
     );
   } else {
     console.log(
-      "[ocr] disabled — set OPENROUTER_API_KEY in .env (screenshots worden wel geanalyseerd zonder tekst)",
+      "[ocr] disabled — geen API-key (GUI onder Model … of OPENROUTER_API_KEY in .env)",
     );
   }
   for (;;) {

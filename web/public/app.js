@@ -74,7 +74,7 @@ function describeOcr(item) {
       status: "no_key",
       label: "Geen API-key",
       detail:
-        "Zet OPENROUTER_API_KEY in /opt/snapzilla/.env en voer docker compose up -d --build analyzer uit.",
+        "Open **Model …** in de header en sla je OpenRouter API-key op (of zet OPENROUTER_API_KEY in .env).",
     };
   }
   if (st === "skipped") {
@@ -544,6 +544,35 @@ function shortModelLabel(modelId) {
   return hit?.name || modelId.split("/").pop() || modelId;
 }
 
+/** Strip full API key from client memory after load/save. */
+function sanitizeSettingsRecord(record) {
+  if (!record) return null;
+  const copy = { ...record };
+  const hadKey = Boolean(String(copy.openrouter_api_key || "").trim());
+  if ("openrouter_api_key" in copy) delete copy.openrouter_api_key;
+  copy._openrouterKeyConfigured =
+    hadKey || Boolean(String(copy.openrouter_api_key_tail || "").trim());
+  return copy;
+}
+
+function openRouterKeyConfigured() {
+  return Boolean(
+    snapzillaSettings?._openrouterKeyConfigured ||
+      snapzillaSettings?.openrouter_api_key_tail,
+  );
+}
+
+function formatOpenRouterKeyStatus() {
+  const tail = snapzillaSettings?.openrouter_api_key_tail;
+  if (openRouterKeyConfigured() && tail) {
+    return `Key ingesteld (…${tail}) — analyzer gebruikt deze key.`;
+  }
+  if (openRouterKeyConfigured()) {
+    return "Key ingesteld — analyzer gebruikt deze key.";
+  }
+  return "Nog geen key in Snapzilla — optioneel ook via .env (OPENROUTER_API_KEY).";
+}
+
 async function loadSnapzillaSettings() {
   snapzillaSettingsMissing = false;
   try {
@@ -557,7 +586,7 @@ async function loadSnapzillaSettings() {
     if (!res.ok) return null;
     const json = await res.json();
     if (json.items?.length) {
-      snapzillaSettings = json.items[0];
+      snapzillaSettings = sanitizeSettingsRecord(json.items[0]);
       return snapzillaSettings;
     }
     const createRes = await fetch(
@@ -573,7 +602,7 @@ async function loadSnapzillaSettings() {
       },
     );
     if (!createRes.ok) return null;
-    snapzillaSettings = await createRes.json();
+    snapzillaSettings = sanitizeSettingsRecord(await createRes.json());
     return snapzillaSettings;
   } catch {
     return null;
@@ -594,11 +623,31 @@ async function patchSnapzillaSettings(payload) {
     },
   );
   if (!res.ok) throw new Error(await res.text());
-  const updated = await res.json();
+  const updated = sanitizeSettingsRecord(await res.json());
   snapzillaSettings = updated;
   updateOcrToggleButton();
   renderOcrModelDialog();
   return updated;
+}
+
+async function saveOpenRouterApiKey(key) {
+  const trimmed = key.trim();
+  if (!trimmed) throw new Error("Voer een OpenRouter API-key in");
+  const tail = trimmed.length >= 4 ? trimmed.slice(-4) : trimmed;
+  await patchSnapzillaSettings({
+    openrouter_api_key: trimmed,
+    openrouter_api_key_tail: tail,
+  });
+  showToast("OpenRouter API-key opgeslagen");
+}
+
+async function clearOpenRouterApiKey() {
+  if (!confirm("OpenRouter API-key uit Snapzilla wissen?")) return;
+  await patchSnapzillaSettings({
+    openrouter_api_key: "",
+    openrouter_api_key_tail: "",
+  });
+  showToast("API-key gewist");
 }
 
 async function setActiveOcrModel(modelId) {
@@ -722,11 +771,21 @@ function renderOcrModelDialog() {
   const sel = $("ocrModelSelect");
   const list = $("ocrInstalledList");
   const modelBtn = $("ocrModelBtn");
+  const keyStatus = $("ocrApiKeyStatus");
+  const keyInput = $("ocrApiKeyInput");
   if (!snapzillaSettings || snapzillaSettingsMissing) {
     modelBtn?.setAttribute("hidden", "");
     return;
   }
   modelBtn?.removeAttribute("hidden");
+
+  if (keyStatus) keyStatus.textContent = formatOpenRouterKeyStatus();
+  if (keyInput && document.activeElement !== keyInput) {
+    keyInput.value = "";
+    keyInput.placeholder = openRouterKeyConfigured()
+      ? "Nieuwe key plakken om te vervangen"
+      : "Plak je OpenRouter key (sk-or-…)";
+  }
 
   const models = installedOcrModels();
   const active = activeOcrModelId();
@@ -1898,6 +1957,18 @@ async function init() {
   renderOcrModelDialog();
   $("ocrModelBtn")?.addEventListener("click", () => openOcrModelModal());
   $("ocrModelCloseBtn")?.addEventListener("click", () => $("ocrModelModal")?.close());
+  $("ocrApiKeyForm")?.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    try {
+      await saveOpenRouterApiKey($("ocrApiKeyInput")?.value || "");
+      $("ocrApiKeyInput").value = "";
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+  $("ocrApiKeyClearBtn")?.addEventListener("click", () => {
+    void clearOpenRouterApiKey().catch((err) => showToast(err.message, true));
+  });
   $("ocrModelSelect")?.addEventListener("change", async (e) => {
     try {
       await setActiveOcrModel(e.target.value);

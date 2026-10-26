@@ -1104,6 +1104,24 @@ body {
   margin-top: 0.5rem;
 }
 
+.ocr-key-warning {
+  border-left: 3px solid var(--warning);
+  padding-left: 0.65rem;
+}
+
+.ocr-api-key-form {
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.ocr-api-key-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.35rem;
+}
+
 .btn {
   font: inherit;
   font-size: 0.875rem;
