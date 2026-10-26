@@ -44,7 +44,7 @@ services:
       - "${SNAPZILLA_PORT:-3000}:80"
 
   ocr:
-    image: gunthercox/ocr-service:1.1.2-tesseract
+    image: gunthercox/ocr-service:2.0.1-tesseract
     container_name: snapzilla-ocr
     restart: unless-stopped
     healthcheck:
