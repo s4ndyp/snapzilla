@@ -1,0 +1,9 @@
+# Kopieer naar docker-compose.override.yml (staat in .gitignore) voor lokale aanpassingen
+# zonder docker-compose.yml te wijzigen — voorkomt git pull-conflicten in Cloud Agents.
+#
+# cp docker-compose.override.example.yml docker-compose.override.yml
+
+services:
+  web:
+    ports:
+      - "3000:80"
