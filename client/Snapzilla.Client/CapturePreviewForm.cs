@@ -22,6 +22,8 @@ sealed class CapturePreviewForm : Form
     readonly TextBox _albumBox;
     readonly Button _uploadBtn;
     readonly Button _saveBtn;
+    readonly Button _noOcrBtn;
+    bool _skipOcr;
     readonly AutocompleteOverlay _suggestions;
     readonly Dictionary<EditTool, EditorToolButton> _toolButtons = new();
     readonly List<Button> _colorChips = new();
@@ -130,8 +132,23 @@ sealed class CapturePreviewForm : Form
 
         var bottom = new Panel { Dock = DockStyle.Bottom, Height = 96, Padding = new Padding(8) };
 
-        _titleBox = new TextBox { PlaceholderText = "Optionele titel", Dock = DockStyle.Fill, Margin = new Padding(0, 0, 8, 0) };
+        _titleBox = new TextBox { PlaceholderText = "Optionele titel", Dock = DockStyle.Fill, Margin = new Padding(0, 0, 4, 0) };
         DarkTheme.StyleInput(_titleBox);
+
+        _noOcrBtn = new Button
+        {
+            Text = "No OCR",
+            AutoSize = true,
+            Margin = new Padding(0, 0, 8, 0),
+            TabStop = true,
+        };
+        DarkTheme.StyleSecondary(_noOcrBtn);
+        _noOcrBtn.Click += (_, _) =>
+        {
+            _skipOcr = !_skipOcr;
+            SyncNoOcrButton();
+        };
+        SyncNoOcrButton();
         _tagsBox = new TextBox { Dock = DockStyle.Fill, PlaceholderText = "werk, bug, ui", Margin = new Padding(0, 0, 8, 0) };
         DarkTheme.StyleInput(_tagsBox);
         WireAutocomplete(_tagsBox, isTags: true);
@@ -158,31 +175,33 @@ sealed class CapturePreviewForm : Form
         {
             Dock = DockStyle.Top,
             Height = 34,
-            ColumnCount = 10,
+            ColumnCount = 11,
             RowCount = 1,
             Padding = new Padding(0),
         };
         metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24f));
+        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22f));
         metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24f));
         metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 20f));
-        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 12f));
+        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22f));
+        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 18f));
+        metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 10f));
         metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
         metaRow.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
 
         metaRow.Controls.Add(MakeMetaLabel("Titel"), 0, 0);
         metaRow.Controls.Add(_titleBox, 1, 0);
-        metaRow.Controls.Add(MakeMetaLabel("Tags"), 2, 0);
-        metaRow.Controls.Add(_tagsBox, 3, 0);
-        metaRow.Controls.Add(MakeMetaLabel("Album"), 4, 0);
-        metaRow.Controls.Add(_albumBox, 5, 0);
-        metaRow.Controls.Add(_status, 6, 0);
-        metaRow.Controls.Add(_uploadBtn, 7, 0);
-        metaRow.Controls.Add(_saveBtn, 8, 0);
-        metaRow.Controls.Add(closeBtn, 9, 0);
+        metaRow.Controls.Add(_noOcrBtn, 2, 0);
+        metaRow.Controls.Add(MakeMetaLabel("Tags"), 3, 0);
+        metaRow.Controls.Add(_tagsBox, 4, 0);
+        metaRow.Controls.Add(MakeMetaLabel("Album"), 5, 0);
+        metaRow.Controls.Add(_albumBox, 6, 0);
+        metaRow.Controls.Add(_status, 7, 0);
+        metaRow.Controls.Add(_uploadBtn, 8, 0);
+        metaRow.Controls.Add(_saveBtn, 9, 0);
+        metaRow.Controls.Add(closeBtn, 10, 0);
 
         bottom.Controls.Add(metaRow);
 
@@ -209,6 +228,20 @@ sealed class CapturePreviewForm : Form
         Deactivate += (_, _) => _suggestions.Hide();
 
         ClientLog.Info($"Preview/editor geopend ({captureMode}, {png.Length} bytes)");
+    }
+
+    void SyncNoOcrButton()
+    {
+        if (_skipOcr)
+        {
+            DarkTheme.StyleToolActive(_noOcrBtn);
+            _noOcrBtn.Text = "No OCR ✓";
+        }
+        else
+        {
+            DarkTheme.StyleSecondary(_noOcrBtn);
+            _noOcrBtn.Text = "No OCR";
+        }
     }
 
     static Label MakeMetaLabel(string text)
@@ -392,7 +425,8 @@ sealed class CapturePreviewForm : Form
                 _captureMode,
                 title: title.Length > 0 ? title : null,
                 tags: ParseTags(),
-                albumId: albumId);
+                albumId: albumId,
+                skipOcr: _skipOcr);
             _status.Text = "Upload geslaagd.";
             ClientLog.Info($"Upload geslaagd ({_captureMode})");
             DialogResult = DialogResult.OK;

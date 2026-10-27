@@ -172,7 +172,13 @@ function recordCreatedAt(record) {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+function isClientOcrOptOut(record) {
+  const v = record?.skip_ocr;
+  return v === true || v === "true" || v === 1 || v === "1";
+}
+
 function isOcrEligible(record, settings) {
+  if (isClientOcrOptOut(record)) return false;
   if (!settings.enabled) return false;
   if (!(settings.apiKey || "").trim()) return false;
   const since = settings.ocrEnabledSince;
@@ -536,9 +542,11 @@ async function analyzeRecord(record) {
     const phash = await computePhash(buffer);
     const colors = await extractColors(buffer);
 
+    const clientSkip = isClientOcrOptOut(record);
     const ocrWillRun = isOcrEligible(record, settings);
     let initialOcrStatus = "skipped";
-    if (ocrWillRun) initialOcrStatus = "pending";
+    if (clientSkip) initialOcrStatus = "skipped";
+    else if (ocrWillRun) initialOcrStatus = "pending";
     else if (!(settings.apiKey || "").trim()) initialOcrStatus = "no_key";
     else if (!settings.enabled) initialOcrStatus = "skipped";
     else initialOcrStatus = "not_eligible";

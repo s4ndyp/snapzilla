@@ -16,11 +16,13 @@ sealed class UploadService(AppConfig config)
         string? title = null,
         IReadOnlyList<string>? tags = null,
         string? albumId = null,
+        bool skipOcr = false,
         CancellationToken ct = default)
     {
         var baseUrl = ServerConnection.Normalize(config.ServerUrl);
         var url = $"{baseUrl}/api/collections/screenshots/records";
-        ClientLog.Info($"Upload start: POST {url} ({png.Length} bytes, mode={captureMode})");
+        ClientLog.Info(
+            $"Upload start: POST {url} ({png.Length} bytes, mode={captureMode}, skip_ocr={skipOcr})");
 
         using var content = new MultipartFormDataContent();
         var image = new ByteArrayContent(png);
@@ -36,6 +38,7 @@ sealed class UploadService(AppConfig config)
         content.Add(new StringContent(albumId ?? ""), "album");
         content.Add(new StringContent("false"), "starred");
         content.Add(new StringContent("false"), "analyzed");
+        content.Add(new StringContent(skipOcr ? "true" : "false"), "skip_ocr");
 
         using var res = await _http.PostAsync(url, content, ct);
         var body = await res.Content.ReadAsStringAsync(ct);
