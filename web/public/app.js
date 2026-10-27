@@ -560,7 +560,9 @@ async function postOcrLog(entry) {
   const body = new FormData();
   for (const [k, v] of Object.entries(entry)) {
     if (v === undefined || v === null) continue;
-    const field = k === "ok" ? "success" : k;
+    let field = k;
+    if (k === "ok") field = "success";
+    if (k === "error") field = "error_message";
     body.append(field, typeof v === "boolean" ? (v ? "true" : "false") : String(v));
   }
   try {

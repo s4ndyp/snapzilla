@@ -46,7 +46,9 @@ async function writeOcrLog(entry) {
   const body = new FormData();
   for (const [k, v] of Object.entries(entry)) {
     if (v === undefined || v === null) continue;
-    const key = k === "ok" ? "success" : k;
+    let key = k;
+    if (k === "ok") key = "success";
+    if (k === "error") key = "error_message";
     body.append(key, typeof v === "boolean" ? (v ? "true" : "false") : String(v));
   }
   try {
