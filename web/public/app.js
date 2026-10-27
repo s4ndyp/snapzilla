@@ -126,8 +126,20 @@ function itemWantsAnalysisPoll(item) {
 }
 
 function canRetryOcr(item) {
+  if (!isRecordAnalyzed(item)) return false;
   const st = String(item.ocr_status || "").toLowerCase();
-  return st === "failed" || st === "no_key";
+  if (st === "pending" || st === "retry") return false;
+  if (item.ocr_text) return false;
+  if (["failed", "no_key", "skipped", "not_eligible", "empty"].includes(st)) {
+    return true;
+  }
+  return !st;
+}
+
+function ocrRetryButtonLabel(item) {
+  const st = String(item.ocr_status || "").toLowerCase();
+  if (st === "skipped" || st === "not_eligible" || !st) return "OCR alsnog starten";
+  return "OCR opnieuw proberen";
 }
 
 async function requestOcrRetry(recordId) {
@@ -177,8 +189,10 @@ function sizeLightboxImageBelow() {
     panel.style.width = w;
     panel.style.height = "";
   }
-  const meta = $("lightboxImageMeta");
-  if (meta) meta.style.width = w;
+  for (const id of ["lightboxImageMeta", "lightboxOcrRetryWrap"]) {
+    const el = $(id);
+    if (el) el.style.width = w;
+  }
 }
 
 function renderLightboxImageMeta(item) {
@@ -201,6 +215,19 @@ function renderLightboxImageMeta(item) {
         : ocr.detail.slice(0, 160);
     ocrEl.innerHTML = `<span class="shot-ocr-badge shot-ocr-${ocr.status}" title="${escapeHtml(tip)}">${escapeHtml(ocr.label)}</span>`;
   }
+  requestAnimationFrame(sizeLightboxImageBelow);
+}
+
+function renderLightboxOcrRetry(item) {
+  const wrap = $("lightboxOcrRetryWrap");
+  const btn = $("lbOcrRetry");
+  if (!wrap || !btn || !item) return;
+  if (!canRetryOcr(item)) {
+    wrap.hidden = true;
+    return;
+  }
+  wrap.hidden = false;
+  btn.textContent = ocrRetryButtonLabel(item);
   requestAnimationFrame(sizeLightboxImageBelow);
 }
 
@@ -2111,11 +2138,6 @@ function refreshLightbox() {
       <dt>Modus</dt><dd>${escapeHtml(item.capture_mode || "—")}</dd>
       <dt>Kleuren</dt><dd>${colorHtml || "—"}</dd>
       <dt>pHash</dt><dd>${escapeHtml(item.phash || "—")}</dd>
-      ${
-        canRetryOcr(item)
-          ? `<dt>OCR</dt><dd><button type="button" class="btn btn-ghost btn-sm" id="lbOcrRetry">${escapeHtml(ocrRetryButtonLabel(item))}</button><p class="hint">Status staat onder de afbeelding.</p></dd>`
-          : ""
-      }
       <dt>Notities</dt>
       <dd><textarea id="notesEditor">${escapeHtml(item.notes || "")}</textarea></dd>
     </dl>
@@ -2127,6 +2149,7 @@ function refreshLightbox() {
 
   renderLightboxShotActions(item);
   renderLightboxImageMeta(item);
+  renderLightboxOcrRetry(item);
   renderLightboxOcrPanel(item);
   bindLightboxCanvas(item);
   setActiveEditTool(state.editTool);
@@ -2143,18 +2166,21 @@ function refreshLightbox() {
     }
   });
 
-  $("lbOcrRetry")?.addEventListener("click", async () => {
-    try {
-      await requestOcrRetry(item.id);
-      item.ocr_status = "retry";
-      item.ocr_text = "";
-      showToast("OCR opnieuw in de wachtrij — even geduld");
-      refreshLightbox();
-      scheduleAnalysisPoll();
-    } catch (err) {
-      showToast(err.message, true);
-    }
-  });
+  const retryBtn = $("lbOcrRetry");
+  if (retryBtn) {
+    retryBtn.onclick = async () => {
+      try {
+        await requestOcrRetry(item.id);
+        item.ocr_status = "retry";
+        item.ocr_text = "";
+        showToast("OCR in de wachtrij — even geduld");
+        refreshLightbox();
+        scheduleAnalysisPoll();
+      } catch (err) {
+        showToast(err.message, true);
+      }
+    };
+  }
 
   $("lbDelete")?.addEventListener("click", async () => {
     if (!confirm("Screenshot verwijderen?")) return;
@@ -2237,6 +2263,7 @@ async function reload(append = false, options = {}) {
       else {
         const lbItem = state.items[state.lightboxIndex];
         renderLightboxImageMeta(lbItem);
+        renderLightboxOcrRetry(lbItem);
         renderLightboxOcrPanel(lbItem);
       }
     }
