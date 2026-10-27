@@ -42,6 +42,7 @@ sealed class CapturePreviewForm : Form
         Size = new Size(1100, 720);
         KeyPreview = true;
         DarkTheme.Apply(this);
+        Icon = SnapzillaIcons.App;
 
         var tools = new FlowLayoutPanel
         {

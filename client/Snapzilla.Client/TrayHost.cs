@@ -80,10 +80,15 @@ sealed class TrayHost : ApplicationContext
 
     public void CaptureRegionInteractive()
     {
-        using var overlay = new RegionCaptureForm();
-        if (overlay.ShowDialog() != DialogResult.OK || overlay.SelectedRegion is not { } rect)
-            return;
-        var png = ScreenCapture.CaptureScreen(rect);
+        byte[]? png;
+        using (new CaptureUiRestore())
+        {
+            using var overlay = new RegionCaptureForm();
+            if (overlay.ShowDialog() != DialogResult.OK || overlay.SelectedRegion is not { } rect)
+                return;
+            png = ScreenCapture.CaptureScreen(rect);
+        }
+
         CaptureAndPreview("region", png);
     }
 

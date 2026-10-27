@@ -58,6 +58,30 @@ async function writeOcrLog(entry) {
   }
 }
 
+/** Keep at most one log row per phase (e.g. poll errors). */
+async function replaceOcrLogForPhase(phase, entry) {
+  try {
+    const filter = encodeURIComponent(`phase = "${phase}"`);
+    for (let page = 1; page <= 20; page++) {
+      const res = await pbFetch(
+        `/api/collections/ocr_logs/records?perPage=200&page=${page}&filter=${filter}&fields=id`,
+      );
+      const json = await res.json();
+      for (const item of json.items || []) {
+        if (item.id) {
+          await pbFetch(`/api/collections/ocr_logs/records/${item.id}`, {
+            method: "DELETE",
+          });
+        }
+      }
+      if (page >= (json.totalPages || 1)) break;
+    }
+  } catch (err) {
+    console.warn(`[ocr-log] cleanup phase=${phase}:`, err.message);
+  }
+  await writeOcrLog({ phase, ...entry });
+}
+
 function usageFields(usage) {
   if (!usage) return {};
   return {
@@ -532,7 +556,7 @@ async function logPollError(message) {
     return;
   }
   lastPollErrorLog = { message, ts: now };
-  await writeOcrLog({ phase: "poll", ok: false, error: message });
+  await replaceOcrLogForPhase("poll", { ok: false, error: message });
 }
 
 async function main() {
