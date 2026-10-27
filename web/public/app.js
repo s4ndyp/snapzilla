@@ -83,14 +83,15 @@ function describeOcr(item) {
       status: "skipped",
       label: "Geen OCR",
       detail:
-        "Screenshot van vóór OCR aan — alleen nieuwe uploads na inschakelen krijgen OCR.",
+        "Screenshot van vóór OCR aan — je kunt OCR alsnog handmatig starten in de lightbox.",
     };
   }
   if (st === "skipped") {
     return {
       status: "skipped",
       label: "Overgeslagen",
-      detail: "OCR stond uit toen deze screenshot verwerkt werd.",
+      detail:
+        "OCR stond uit bij verwerking — open de lightbox en kies OCR alsnog starten.",
     };
   }
   if (st === "failed") {
@@ -1493,12 +1494,6 @@ function renderGallery() {
     }
 
     const ocrBadgeHtml = renderOcrBadgeHtml(item);
-    if (ocrBadgeHtml) {
-      const ocrEl = document.createElement("span");
-      ocrEl.className = "shot-ocr-wrap";
-      ocrEl.innerHTML = ocrBadgeHtml;
-      thumb.appendChild(ocrEl);
-    }
 
     const meta = document.createElement("div");
     meta.className = "shot-meta";
@@ -1507,7 +1502,10 @@ function renderGallery() {
       : "";
     meta.innerHTML = `
       <div class="shot-meta-left">${star}<span class="shot-date">${formatDate(item.captured_at || item.created)}</span></div>
-      <div class="shot-meta-right">${renderShotAlbumBadge(item)}</div>
+      <div class="shot-meta-right">
+        ${ocrBadgeHtml ? `<span class="shot-meta-ocr">${ocrBadgeHtml}</span>` : ""}
+        ${renderShotAlbumBadge(item)}
+      </div>
     `;
 
     card.appendChild(top);
@@ -2115,7 +2113,7 @@ function refreshLightbox() {
       <dt>pHash</dt><dd>${escapeHtml(item.phash || "—")}</dd>
       ${
         canRetryOcr(item)
-          ? `<dt>OCR</dt><dd><button type="button" class="btn btn-ghost btn-sm" id="lbOcrRetry">OCR opnieuw proberen</button><p class="hint">Status staat onder de afbeelding.</p></dd>`
+          ? `<dt>OCR</dt><dd><button type="button" class="btn btn-ghost btn-sm" id="lbOcrRetry">${escapeHtml(ocrRetryButtonLabel(item))}</button><p class="hint">Status staat onder de afbeelding.</p></dd>`
           : ""
       }
       <dt>Notities</dt>
@@ -2235,9 +2233,12 @@ async function reload(append = false, options = {}) {
     renderSidebarLists();
     renderGallery();
     if (lightboxOpen && lightboxId && state.lightboxIndex >= 0) {
-      const lbItem = state.items[state.lightboxIndex];
-      renderLightboxImageMeta(lbItem);
-      renderLightboxOcrPanel(lbItem);
+      if (options.fromAnalysisPoll) refreshLightbox();
+      else {
+        const lbItem = state.items[state.lightboxIndex];
+        renderLightboxImageMeta(lbItem);
+        renderLightboxOcrPanel(lbItem);
+      }
     }
     scheduleAnalysisPoll();
   } catch (err) {
