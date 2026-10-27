@@ -1596,6 +1596,14 @@ body {
   max-width: 55%;
 }
 
+.lightbox-ocr-retry {
+  margin-top: 0.4rem;
+  max-width: 100%;
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+}
+
 .lightbox-edit-tools {
   display: flex;
   align-items: center;
