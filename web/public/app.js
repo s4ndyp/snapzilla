@@ -128,18 +128,7 @@ function itemWantsAnalysisPoll(item) {
 function canRetryOcr(item) {
   if (!isRecordAnalyzed(item)) return false;
   const st = String(item.ocr_status || "").toLowerCase();
-  if (st === "pending" || st === "retry") return false;
-  if (item.ocr_text) return false;
-  if (["failed", "no_key", "skipped", "not_eligible", "empty"].includes(st)) {
-    return true;
-  }
-  return !st;
-}
-
-function ocrRetryButtonLabel(item) {
-  const st = String(item.ocr_status || "").toLowerCase();
-  if (st === "skipped" || st === "not_eligible" || !st) return "OCR alsnog starten";
-  return "OCR opnieuw proberen";
+  return st !== "pending" && st !== "retry";
 }
 
 async function requestOcrRetry(recordId) {
@@ -189,57 +178,23 @@ function sizeLightboxImageBelow() {
     panel.style.width = w;
     panel.style.height = "";
   }
-  for (const id of ["lightboxImageMeta", "lightboxOcrRetryWrap"]) {
-    const el = $(id);
-    if (el) el.style.width = w;
-  }
-}
-
-function renderLightboxImageMeta(item) {
-  const bar = $("lightboxImageMeta");
-  const dateEl = $("lightboxImageDate");
-  const ocrEl = $("lightboxImageOcr");
-  if (!bar || !dateEl || !ocrEl || !item) return;
-
-  dateEl.textContent = formatDate(item.captured_at || item.created);
-
-  const ocr = describeOcr(item);
-  if (ocr.status === "unknown") {
-    ocrEl.innerHTML = "";
-    ocrEl.hidden = true;
-  } else {
-    ocrEl.hidden = false;
-    const tip =
-      ocr.status === "done"
-        ? `${ocr.label} · ${ocr.detail.length} tekens`
-        : ocr.detail.slice(0, 160);
-    ocrEl.innerHTML = `<span class="shot-ocr-badge shot-ocr-${ocr.status}" title="${escapeHtml(tip)}">${escapeHtml(ocr.label)}</span>`;
-  }
-  requestAnimationFrame(sizeLightboxImageBelow);
-}
-
-function renderLightboxOcrRetry(item) {
-  const wrap = $("lightboxOcrRetryWrap");
-  const btn = $("lbOcrRetry");
-  if (!wrap || !btn || !item) return;
-  if (!canRetryOcr(item)) {
-    wrap.hidden = true;
-    return;
-  }
-  wrap.hidden = false;
-  btn.textContent = ocrRetryButtonLabel(item);
-  requestAnimationFrame(sizeLightboxImageBelow);
+  const bar = $("lightboxOcrBar");
+  if (bar) bar.style.width = w;
 }
 
 function renderLightboxOcrPanel(item) {
   const bar = $("lightboxOcrBar");
   const panel = $("lightboxOcrPanel");
   const btn = $("lbOcrToggle");
+  const retryBtn = $("lbOcrRetry");
   if (!bar || !panel || !btn) return;
   const text = item?.ocr_text || "";
-  bar.hidden = !text;
+  const showRetry = canRetryOcr(item);
+  bar.hidden = !text && !showRetry;
+  if (retryBtn) retryBtn.hidden = !showRetry;
   if (!text) {
     panel.hidden = true;
+    requestAnimationFrame(sizeLightboxImageBelow);
     return;
   }
   $("lightboxOcrText").textContent = text;
@@ -2148,8 +2103,6 @@ function refreshLightbox() {
   `;
 
   renderLightboxShotActions(item);
-  renderLightboxImageMeta(item);
-  renderLightboxOcrRetry(item);
   renderLightboxOcrPanel(item);
   bindLightboxCanvas(item);
   setActiveEditTool(state.editTool);
@@ -2262,8 +2215,6 @@ async function reload(append = false, options = {}) {
       if (options.fromAnalysisPoll) refreshLightbox();
       else {
         const lbItem = state.items[state.lightboxIndex];
-        renderLightboxImageMeta(lbItem);
-        renderLightboxOcrRetry(lbItem);
         renderLightboxOcrPanel(lbItem);
       }
     }
