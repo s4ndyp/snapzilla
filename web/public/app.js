@@ -1,4 +1,5 @@
 import { renderOcrMarkdown } from "./ocr-markdown.js";
+import { initMobileUi } from "./mobile.js";
 
 const API = "/api";
 const COLLECTION = "screenshots";
@@ -68,6 +69,13 @@ function describeOcr(item) {
       label: "Bezig…",
       detail:
         "Screenshot wordt geanalyseerd. Draait snapzilla-analyzer niet? docker compose ps / logs analyzer.",
+    };
+  }
+  if (isClientSkipOcr(item)) {
+    return {
+      status: "skipped",
+      label: "No OCR",
+      detail: "Upload vanaf de client met No OCR — server-OCR overgeslagen.",
     };
   }
   if (st === "pending" || st === "retry") {
@@ -2548,6 +2556,8 @@ async function init() {
     if (e.key === "ArrowRight") $("lightboxNext").click();
     if (e.key === "Escape") $("lightbox").close();
   });
+
+  initMobileUi();
 
   await reload();
   setInterval(() => reload(), 30000);
