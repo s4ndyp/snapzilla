@@ -29,6 +29,7 @@ const state = {
   editSnapshot: null,
   editUndoStack: [],
   editChainAnchor: null,
+  ocrPanelOpen: false,
 };
 
 const MAX_EDIT_UNDO = 8;
@@ -151,15 +152,68 @@ function renderOcrBadgeHtml(item) {
 
 function renderLightboxOcrHtml(item) {
   const ocr = describeOcr(item);
-  const preview =
-    ocr.status === "done"
-      ? escapeHtml(ocr.detail.slice(0, 2000))
-      : escapeHtml(ocr.detail);
-  const more =
-    ocr.status === "done" && ocr.detail.length > 2000
-      ? `<p class="ocr-trunc-hint">… ${ocr.detail.length - 2000} tekens extra — gebruik zoeken om alles te vinden.</p>`
-      : "";
-  return `<span class="ocr-status-pill ocr-pill-${ocr.status}">${escapeHtml(ocr.label)}</span><div class="ocr-detail">${preview}</div>${more}`;
+  const pill = `<span class="ocr-status-pill ocr-pill-${ocr.status}">${escapeHtml(ocr.label)}</span>`;
+  if (ocr.status === "done") {
+    return `${pill}<span class="hint">${ocr.detail.length} tekens — knop OCR-resultaat onder de afbeelding</span>`;
+  }
+  return `${pill}<span class="hint">${escapeHtml(ocr.detail)}</span>`;
+}
+
+function lightboxImageBox() {
+  const canvas = $("lightboxCanvas");
+  const el = canvas && !canvas.hidden ? canvas : $("lightboxImg");
+  const rect = el?.getBoundingClientRect();
+  return rect && rect.width > 0 ? rect : null;
+}
+
+function sizeLightboxOcrPanel() {
+  const panel = $("lightboxOcrPanel");
+  if (!panel || panel.hidden) return;
+  const box = lightboxImageBox();
+  if (!box) return;
+  panel.style.width = `${Math.max(box.width, 320)}px`;
+  panel.style.height = `${Math.max(box.height, 200)}px`;
+}
+
+function renderLightboxOcrPanel(item) {
+  const bar = $("lightboxOcrBar");
+  const panel = $("lightboxOcrPanel");
+  const btn = $("lbOcrToggle");
+  if (!bar || !panel || !btn) return;
+  const text = item?.ocr_text || "";
+  bar.hidden = !text;
+  if (!text) {
+    panel.hidden = true;
+    return;
+  }
+  $("lightboxOcrText").textContent = text;
+  $("lightboxOcrCount").textContent = `${text.length} tekens`;
+  panel.hidden = !state.ocrPanelOpen;
+  btn.textContent = state.ocrPanelOpen ? "OCR-resultaat verbergen" : "OCR-resultaat";
+  btn.setAttribute("aria-expanded", state.ocrPanelOpen ? "true" : "false");
+  if (state.ocrPanelOpen) requestAnimationFrame(sizeLightboxOcrPanel);
+}
+
+function bindLightboxOcrPanel() {
+  $("lbOcrToggle")?.addEventListener("click", () => {
+    state.ocrPanelOpen = !state.ocrPanelOpen;
+    renderLightboxOcrPanel(state.items[state.lightboxIndex]);
+    if (state.ocrPanelOpen) {
+      requestAnimationFrame(() =>
+        $("lightboxOcrPanel")?.scrollIntoView({ behavior: "smooth", block: "nearest" }),
+      );
+    }
+  });
+  $("lbOcrCopy")?.addEventListener("click", async () => {
+    const text = state.items[state.lightboxIndex]?.ocr_text || "";
+    try {
+      await navigator.clipboard.writeText(text);
+      showToast("OCR-tekst gekopieerd");
+    } catch {
+      showToast("Kopiëren mislukt", true);
+    }
+  });
+  window.addEventListener("resize", sizeLightboxOcrPanel);
 }
 
 function formatBytes(n) {
@@ -2036,9 +2090,12 @@ function refreshLightbox() {
   `;
 
   renderLightboxShotActions(item);
+  renderLightboxOcrPanel(item);
   bindLightboxCanvas(item);
   setActiveEditTool(state.editTool);
-  void startLightboxEdit(item).catch((err) => showToast(err.message, true));
+  void startLightboxEdit(item)
+    .then(() => requestAnimationFrame(sizeLightboxOcrPanel))
+    .catch((err) => showToast(err.message, true));
 
   $("notesEditor")?.addEventListener("blur", async (e) => {
     try {
@@ -2130,6 +2187,7 @@ async function reload(append = false, options = {}) {
       if (dd) {
         dd.innerHTML = renderLightboxOcrHtml(state.items[state.lightboxIndex]);
       }
+      renderLightboxOcrPanel(state.items[state.lightboxIndex]);
     }
     scheduleAnalysisPoll();
   } catch (err) {
@@ -2170,6 +2228,7 @@ async function init() {
   });
 
   $("refreshBtn").addEventListener("click", () => reload());
+  bindLightboxOcrPanel();
 
   await loadSnapzillaSettings();
   updateOcrToggleButton();

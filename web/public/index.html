@@ -251,6 +251,19 @@
             <canvas id="lightboxCanvas" hidden></canvas>
           </div>
           <div class="lightbox-shot-actions" id="lightboxShotActions"></div>
+          <div class="lightbox-ocr-bar" id="lightboxOcrBar" hidden>
+            <button type="button" class="btn btn-ghost btn-sm" id="lbOcrToggle" aria-expanded="false" aria-controls="lightboxOcrPanel">
+              OCR-resultaat
+            </button>
+          </div>
+          <section class="lightbox-ocr-panel" id="lightboxOcrPanel" hidden aria-label="OCR-resultaat">
+            <header class="lightbox-ocr-head">
+              <span class="lightbox-ocr-title">OCR-resultaat</span>
+              <span class="hint" id="lightboxOcrCount"></span>
+              <button type="button" class="btn btn-ghost btn-sm" id="lbOcrCopy">Kopieer</button>
+            </header>
+            <pre class="lightbox-ocr-text" id="lightboxOcrText"></pre>
+          </section>
           <figcaption id="lightboxCaption"></figcaption>
         </figure>
         <button type="button" class="lightbox-nav next" id="lightboxNext" aria-label="Volgende">›</button>
