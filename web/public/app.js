@@ -55,6 +55,11 @@ function isRecordAnalyzed(item) {
 }
 
 /** @returns {{ status: string, label: string, detail: string }} */
+function isClientSkipOcr(item) {
+  const v = item?.skip_ocr;
+  return v === true || v === "true" || v === 1 || v === "1";
+}
+
 function describeOcr(item) {
   const st = String(item.ocr_status || "").toLowerCase();
   if (!isRecordAnalyzed(item)) {
