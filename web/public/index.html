@@ -8,6 +8,7 @@
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/snapzilla-icon-32.png" />
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/mobile.css" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -19,6 +20,18 @@
     <div class="bg-glow" aria-hidden="true"></div>
 
     <header class="header">
+      <button
+        type="button"
+        class="mobile-menu-btn"
+        id="mobileMenuBtn"
+        aria-label="Filters menu"
+        aria-expanded="false"
+        aria-controls="sidebarFilters"
+      >
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+      </button>
       <div class="logo">
         <img class="logo-mark" src="/icons/snapzilla-icon-128.png" width="54" height="54" alt="" />
         <div>
@@ -65,7 +78,7 @@
     </header>
 
     <div class="shell">
-      <aside class="sidebar" aria-label="Filters">
+      <aside class="sidebar" id="sidebarFilters" aria-label="Filters">
         <section class="sidebar-block">
           <h2>Zoeken</h2>
           <input
@@ -184,6 +197,39 @@
         </section>
       </aside>
     </div>
+
+    <div class="mobile-backdrop" id="mobileBackdrop" hidden aria-hidden="true"></div>
+
+    <nav class="mobile-bottom-nav" id="mobileBottomNav" aria-label="Mobiel menu">
+      <button type="button" class="mobile-nav-btn mobile-nav-active" data-mobile-tab="gallery">
+        <span class="mobile-nav-icon" aria-hidden="true">🖼</span>
+        <span>Galerij</span>
+      </button>
+      <button type="button" class="mobile-nav-btn" data-mobile-tab="filters">
+        <span class="mobile-nav-icon" aria-hidden="true">☰</span>
+        <span>Filters</span>
+      </button>
+      <button type="button" class="mobile-nav-btn" data-mobile-tab="upload">
+        <span class="mobile-nav-icon" aria-hidden="true">↑</span>
+        <span>Upload</span>
+      </button>
+      <button type="button" class="mobile-nav-btn" data-mobile-tab="calendar">
+        <span class="mobile-nav-icon" aria-hidden="true">📅</span>
+        <span>Datum</span>
+      </button>
+      <button type="button" class="mobile-nav-btn" data-mobile-tab="more">
+        <span class="mobile-nav-icon" aria-hidden="true">⋯</span>
+        <span>Meer</span>
+      </button>
+    </nav>
+
+    <section class="mobile-more-sheet" id="mobileMoreSheet" hidden aria-label="Meer opties">
+      <div class="mobile-more-head">
+        <h2>Meer</h2>
+        <button type="button" class="btn btn-ghost btn-sm" id="mobileMoreClose" aria-label="Sluiten">×</button>
+      </div>
+      <div class="mobile-more-actions" id="mobileMoreActions"></div>
+    </section>
 
     <dialog class="lightbox" id="lightbox">
       <div class="lightbox-inner">
