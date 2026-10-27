@@ -182,7 +182,7 @@ function sizeLightboxOcrPanel() {
   const box = lightboxImageBox();
   if (!box) return;
   panel.style.width = `${Math.max(box.width, 320)}px`;
-  panel.style.height = `${Math.max(box.height, 200)}px`;
+  panel.style.height = "";
 }
 
 function renderLightboxOcrPanel(item) {

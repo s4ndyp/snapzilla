@@ -1545,6 +1545,13 @@ body {
   position: relative;
   max-width: 100%;
   max-height: calc(100vh - 14rem);
+  flex-shrink: 0;
+}
+
+.lightbox-figure:has(.lightbox-ocr-panel:not([hidden])) .lightbox-view,
+.lightbox-figure:has(.lightbox-ocr-panel:not([hidden])) .lightbox-view img,
+.lightbox-figure:has(.lightbox-ocr-panel:not([hidden])) .lightbox-view canvas {
+  max-height: none;
 }
 
 .lightbox-view canvas {
@@ -1694,13 +1701,11 @@ body {
 .lightbox-ocr-panel {
   margin-top: 0.65rem;
   max-width: 100%;
-  min-height: 12rem;
-  display: flex;
-  flex-direction: column;
+  flex-shrink: 0;
   background: #0a0e14;
   border: 1px solid #1e293b;
   border-radius: 8px;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .lightbox-ocr-panel[hidden] {
@@ -1726,10 +1731,9 @@ body {
 }
 
 .lightbox-ocr-text {
-  flex: 1;
   margin: 0;
   padding: 0.85rem 1rem;
-  overflow: auto;
+  overflow: visible;
   font-family: inherit;
   font-size: 0.92rem;
   line-height: 1.55;
