@@ -46,7 +46,8 @@ async function writeOcrLog(entry) {
   const body = new FormData();
   for (const [k, v] of Object.entries(entry)) {
     if (v === undefined || v === null) continue;
-    body.append(k, typeof v === "boolean" ? (v ? "true" : "false") : String(v));
+    const key = k === "ok" ? "success" : k;
+    body.append(key, typeof v === "boolean" ? (v ? "true" : "false") : String(v));
   }
   try {
     await pbFetch("/api/collections/ocr_logs/records", { method: "POST", body });
