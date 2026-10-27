@@ -5,6 +5,7 @@ sealed class MainWindowForm : Form
     public MainWindowForm(TrayHost host, AppConfig config)
     {
         Text = "Snapzilla";
+        Icon = SnapzillaIcons.App;
         StartPosition = FormStartPosition.CenterScreen;
         ClientSize = new Size(420, 360);
         FormBorderStyle = FormBorderStyle.FixedSingle;
