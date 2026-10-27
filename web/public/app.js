@@ -2093,6 +2093,7 @@ function refreshLightbox() {
       <dt>Modus</dt><dd>${escapeHtml(item.capture_mode || "—")}</dd>
       <dt>Kleuren</dt><dd>${colorHtml || "—"}</dd>
       <dt>pHash</dt><dd>${escapeHtml(item.phash || "—")}</dd>
+      <dt>OCR</dt><dd>${renderOcrBadgeHtml(item) || "—"}</dd>
       <dt>Notities</dt>
       <dd><textarea id="notesEditor">${escapeHtml(item.notes || "")}</textarea></dd>
     </dl>
