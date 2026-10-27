@@ -411,11 +411,9 @@ async function analyzeRecord(record) {
 }
 
 async function pollOnce() {
-  const pendingFilter = encodeURIComponent(
-    '(analyzed = false || analyzed = null || analyzed != true)',
-  );
+  const pendingFilter = encodeURIComponent("analyzed != true");
   const res = await pbFetch(
-    `/api/collections/screenshots/records?perPage=5&filter=${pendingFilter}&sort=created`,
+    `/api/collections/screenshots/records?perPage=5&filter=${pendingFilter}&sort=-created`,
   );
   const json = await res.json();
   for (const item of json.items || []) {
@@ -423,9 +421,34 @@ async function pollOnce() {
   }
 }
 
+const POLL_ERROR_LOG_MS = 60_000;
+let lastPollErrorLog = { message: "", ts: 0 };
+
+async function logPollError(message) {
+  const now = Date.now();
+  if (
+    message === lastPollErrorLog.message &&
+    now - lastPollErrorLog.ts < POLL_ERROR_LOG_MS
+  ) {
+    return;
+  }
+  lastPollErrorLog = { message, ts: now };
+  await writeOcrLog({ phase: "poll", ok: false, error: message });
+}
+
 async function main() {
   console.log(`Snapzilla analyzer → ${PB} (poll ${POLL_MS}ms)`);
   const { model, apiKey, ocrEnabledSince } = await fetchSnapzillaSettings();
+  await writeOcrLog({
+    phase: "analyzer-start",
+    model,
+    ok: true,
+    response_json: JSON.stringify({
+      key: apiKey ? "set" : "missing",
+      ocr_enabled_since: ocrEnabledSince,
+      poll_ms: POLL_MS,
+    }),
+  });
   if (apiKey) {
     const source = apiKey === OPENROUTER_API_KEY_ENV ? "env" : "database";
     console.log(
@@ -441,6 +464,7 @@ async function main() {
       await pollOnce();
     } catch (err) {
       console.error("[poll]", err.message);
+      await logPollError(err.message);
     }
     await new Promise((r) => setTimeout(r, POLL_MS));
   }
