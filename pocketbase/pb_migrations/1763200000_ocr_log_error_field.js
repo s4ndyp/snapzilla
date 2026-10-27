@@ -9,25 +9,18 @@ migrate(
       return;
     }
 
-    let changed = false;
-    if (!collection.fields.getByName?.("error_message")) {
-      try {
-        collection.fields.add(
-          new Field({
-            name: "error_message",
-            type: "text",
-            required: false,
-            max: 2000,
-          }),
-        );
-        changed = true;
-      } catch {
-        /* may exist without getByName */
-      }
-    }
-
-    if (changed) {
+    try {
+      collection.fields.add(
+        new Field({
+          name: "error_message",
+          type: "text",
+          required: false,
+          max: 2000,
+        }),
+      );
       app.save(collection);
+    } catch {
+      /* already exists */
     }
 
     try {
