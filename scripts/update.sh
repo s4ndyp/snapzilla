@@ -33,9 +33,13 @@ if [ "$ready" -ne 1 ]; then
   exit 1
 fi
 
-docker compose exec -T pocketbase pocketbase migrate up \
+if ! docker compose exec -T pocketbase pocketbase migrate up \
   --dir=/pb_data \
-  --migrationsDir=/pb_migrations
+  --migrationsDir=/pb_migrations; then
+  echo "PocketBase migrate up mislukt — output hierboven." >&2
+  echo "Handmatig: cd $ROOT && docker compose exec pocketbase pocketbase migrate up --dir=/pb_data --migrationsDir=/pb_migrations" >&2
+  exit 1
+fi
 
 echo "→ Klaar."
 docker compose ps

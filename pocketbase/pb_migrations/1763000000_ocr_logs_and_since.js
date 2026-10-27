@@ -2,15 +2,28 @@
 migrate(
   (app) => {
     const settings = app.findCollectionByNameOrId("snapzilla_settings");
-    settings.fields.add(
-      new Field({
-        name: "ocr_enabled_since",
-        type: "date",
-        required: false,
-      }),
-    );
-    app.save(settings);
+    try {
+      settings.fields.add(
+        new Field({
+          name: "ocr_enabled_since",
+          type: "date",
+          required: false,
+        }),
+      );
+      app.save(settings);
+    } catch {
+      /* field may already exist */
+    }
 
+    let createLogs = true;
+    try {
+      app.findCollectionByNameOrId("ocr_logs");
+      createLogs = false;
+    } catch {
+      /* create below */
+    }
+
+    if (createLogs) {
     const logs = new Collection({
       name: "ocr_logs",
       type: "base",
@@ -39,7 +52,7 @@ migrate(
           max: 160,
         },
         {
-          name: "ok",
+          name: "success",
           type: "bool",
           required: false,
         },
@@ -68,15 +81,13 @@ migrate(
           min: 0,
         },
       ],
-      indexes: [
-        "CREATE INDEX idx_ocr_logs_created ON ocr_logs (created)",
-      ],
     });
     app.save(logs);
+    }
 
     try {
-      const records = app.findRecordsByFilter(settings.id, "id != ''");
-      const now = new Date().toISOString();
+      const records = app.findRecordsByFilter("snapzilla_settings", "id != ''");
+      const now = new Date().toISOString().replace("T", " ").slice(0, 19);
       for (const record of records) {
         if (!record.get("ocr_enabled_since")) {
           record.set("ocr_enabled_since", now);

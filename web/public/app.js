@@ -556,6 +556,20 @@ function formatOpenRouterKeyCheck(json) {
   return parts.length ? parts.join(" · ") : "Key geaccepteerd door OpenRouter";
 }
 
+async function postOcrLog(entry) {
+  const body = new FormData();
+  for (const [k, v] of Object.entries(entry)) {
+    if (v === undefined || v === null) continue;
+    const field = k === "ok" ? "success" : k;
+    body.append(field, typeof v === "boolean" ? (v ? "true" : "false") : String(v));
+  }
+  try {
+    await fetch(`${API}/collections/ocr_logs/records`, { method: "POST", body });
+  } catch {
+    /* ignore */
+  }
+}
+
 async function testOpenRouterKey(apiKey) {
   const res = await fetch("/openrouter/auth/key", {
     headers: {
@@ -626,23 +640,66 @@ async function testOpenRouterVisionModel(apiKey, modelId) {
 
 async function runOpenRouterKeyTest() {
   setOcrFeedback("API-key testen bij OpenRouter…", "info");
+  const started = Date.now();
   const apiKey = await resolveOpenRouterKeyForTest();
-  const json = await testOpenRouterKey(apiKey);
-  setOcrFeedback(`Key OK — ${formatOpenRouterKeyCheck(json)}`, "success");
-  showToast("OpenRouter API-key is geldig");
+  try {
+    const json = await testOpenRouterKey(apiKey);
+    await postOcrLog({
+      phase: "ui-test-key",
+      ok: true,
+      request_json: JSON.stringify({ endpoint: "/openrouter/auth/key" }),
+      response_json: JSON.stringify(json).slice(0, 8000),
+      duration_ms: Date.now() - started,
+    });
+    setOcrFeedback(`Key OK — ${formatOpenRouterKeyCheck(json)}`, "success");
+    showToast("OpenRouter API-key is geldig");
+  } catch (err) {
+    await postOcrLog({
+      phase: "ui-test-key",
+      ok: false,
+      request_json: JSON.stringify({ endpoint: "/openrouter/auth/key" }),
+      error: err.message,
+      duration_ms: Date.now() - started,
+    });
+    throw err;
+  }
 }
 
 async function runOcrPipelineTest() {
   setOcrFeedback("Key en vision-model testen…", "info");
+  const started = Date.now();
   const apiKey = await resolveOpenRouterKeyForTest();
-  const keyJson = await testOpenRouterKey(apiKey);
   const model = activeOcrModelId();
-  const reply = await testOpenRouterVisionModel(apiKey, model);
-  setOcrFeedback(
-    `OCR-test gelukt — ${formatOpenRouterKeyCheck(keyJson)} · model ${shortModelLabel(model)} antwoordde: “${reply.slice(0, 80)}”`,
-    "success",
-  );
-  showToast("OCR-test geslaagd — analyzer zou moeten werken");
+  try {
+    const keyJson = await testOpenRouterKey(apiKey);
+    const reply = await testOpenRouterVisionModel(apiKey, model);
+    await postOcrLog({
+      phase: "ui-test-ocr",
+      model,
+      ok: true,
+      request_json: JSON.stringify({
+        endpoint: "/openrouter/chat/completions",
+        model,
+        note: "test image 1x1",
+      }),
+      response_json: JSON.stringify({ reply: reply.slice(0, 500) }),
+      duration_ms: Date.now() - started,
+    });
+    setOcrFeedback(
+      `OCR-test gelukt — ${formatOpenRouterKeyCheck(keyJson)} · model ${shortModelLabel(model)} antwoordde: “${reply.slice(0, 80)}”`,
+      "success",
+    );
+    showToast("OCR-test geslaagd — analyzer zou moeten werken");
+  } catch (err) {
+    await postOcrLog({
+      phase: "ui-test-ocr",
+      model,
+      ok: false,
+      error: err.message,
+      duration_ms: Date.now() - started,
+    });
+    throw err;
+  }
 }
 
 function normalizeOcrModels(raw) {

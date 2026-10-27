@@ -30,7 +30,11 @@ function prettyJson(raw) {
 }
 
 function renderLogItem(item) {
-  const ok = item.ok === true || item.ok === "true";
+  const ok =
+    item.success === true ||
+    item.success === "true" ||
+    item.ok === true ||
+    item.ok === "true";
   const card = document.createElement("article");
   card.className = `ocr-log-card${ok ? "" : " ocr-log-card-error"}`;
   const head = document.createElement("header");

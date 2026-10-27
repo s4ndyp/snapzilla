@@ -30,7 +30,7 @@ migrate(
 
     try {
       const records = app.findRecordsByFilter(
-        collection.id,
+        "snapzilla_settings",
         "id != ''",
       );
       for (const record of records) {
