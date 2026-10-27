@@ -880,10 +880,14 @@ body {
 }
 
 .shot-meta-right {
-  flex-shrink: 0;
+  flex-shrink: 1;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  max-width: 55%;
+  gap: 0.35rem;
+  max-width: 58%;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 
 .shot-date {
