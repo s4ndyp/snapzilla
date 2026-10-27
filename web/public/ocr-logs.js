@@ -174,6 +174,141 @@ async function loadLogs() {
   for (const item of items) {
     list.appendChild(renderLogItem(item));
   }
+  void loadStats();
+}
+
+const AI_PHASES = ["openrouter", "ui-test-ocr"];
+const STATS_FIELDS =
+  "id,created,phase,model,success,duration_ms,prompt_tokens,completion_tokens,total_tokens,cost";
+
+async function fetchAiRequests() {
+  const filter = AI_PHASES.map((p) => `phase = "${p}"`).join(" || ");
+  const all = [];
+  for (let page = 1; page <= 20; page++) {
+    const params = new URLSearchParams({
+      page: String(page),
+      perPage: "500",
+      sort: "-created",
+      filter,
+      fields: STATS_FIELDS,
+    });
+    const res = await fetch(`${API}/collections/${LOG_COLLECTION}/records?${params}`);
+    if (!res.ok) throw new Error(await res.text());
+    const json = await res.json();
+    all.push(...(json.items || []));
+    if (page >= (json.totalPages || 1)) break;
+  }
+  return all;
+}
+
+function num(v) {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function isSuccess(item) {
+  return item.success === true || item.success === "true";
+}
+
+function formatTokens(n) {
+  return Math.round(n).toLocaleString("nl-NL");
+}
+
+function formatCost(n) {
+  if (!n) return "$0";
+  if (n < 0.01) return `$${n.toFixed(6)}`;
+  return `$${n.toFixed(4)}`;
+}
+
+function summarize(items) {
+  return items.reduce(
+    (acc, it) => {
+      acc.count += 1;
+      if (isSuccess(it)) acc.ok += 1;
+      acc.prompt += num(it.prompt_tokens);
+      acc.completion += num(it.completion_tokens);
+      acc.tokens += num(it.total_tokens);
+      acc.cost += num(it.cost);
+      acc.duration += num(it.duration_ms);
+      return acc;
+    },
+    { count: 0, ok: 0, prompt: 0, completion: 0, tokens: 0, cost: 0, duration: 0 },
+  );
+}
+
+function statRow(label, value) {
+  return `<div class="ocr-stat-row"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
+}
+
+function renderStats(items) {
+  const el = $("logStats");
+  if (!el) return;
+  if (!items.length) {
+    el.innerHTML = `<h2>Statistieken</h2><p class="hint">Nog geen AI-aanvragen gelogd.</p>`;
+    return;
+  }
+
+  const last = items[0];
+  const total = summarize(items);
+  const scans = summarize(items.filter((i) => i.phase === "openrouter" && isSuccess(i)));
+  const today = new Date().toISOString().slice(0, 10);
+  const todaySum = summarize(items.filter((i) => String(i.created || "").slice(0, 10) === today));
+  const costKnown = items.some((i) => num(i.cost) > 0);
+
+  const byModel = new Map();
+  for (const it of items) {
+    const key = it.model || "onbekend";
+    if (!byModel.has(key)) byModel.set(key, []);
+    byModel.get(key).push(it);
+  }
+  const modelRows = [...byModel.entries()]
+    .map(([model, list]) => ({ model, s: summarize(list) }))
+    .sort((a, b) => b.s.cost - a.s.cost || b.s.tokens - a.s.tokens)
+    .map(
+      ({ model, s }) =>
+        `<li><span class="ocr-stat-model">${escapeHtml(model)}</span><span>${s.count}× · ${formatTokens(s.tokens)} tokens · ${formatCost(s.cost)}</span></li>`,
+    )
+    .join("");
+
+  el.innerHTML = `
+    <h2>Laatste aanvraag</h2>
+    <dl class="ocr-stat-list">
+      ${statRow("Tijd", formatWhen(last.created))}
+      ${statRow("Model", last.model || "—")}
+      ${statRow("Status", isSuccess(last) ? "OK" : "Fout")}
+      ${statRow("Tokens", `${formatTokens(num(last.total_tokens))} (in ${formatTokens(num(last.prompt_tokens))} / uit ${formatTokens(num(last.completion_tokens))})`)}
+      ${statRow("Kosten", formatCost(num(last.cost)))}
+      ${statRow("Duur", last.duration_ms != null ? `${num(last.duration_ms)} ms` : "—")}
+    </dl>
+
+    <h2>Totaal</h2>
+    <dl class="ocr-stat-list">
+      ${statRow("Aanvragen", `${total.count} (${total.ok} OK, ${total.count - total.ok} fout)`)}
+      ${statRow("Tokens", `${formatTokens(total.tokens)} (in ${formatTokens(total.prompt)} / uit ${formatTokens(total.completion)})`)}
+      ${statRow("Kosten", formatCost(total.cost))}
+    </dl>
+
+    <h2>Extra</h2>
+    <dl class="ocr-stat-list">
+      ${statRow("Vandaag", `${todaySum.count} aanvragen · ${formatTokens(todaySum.tokens)} tokens · ${formatCost(todaySum.cost)}`)}
+      ${statRow("Gescande screenshots", String(scans.count))}
+      ${statRow("Gem. kosten per screenshot", scans.count ? formatCost(scans.cost / scans.count) : "—")}
+      ${statRow("Gem. tokens per screenshot", scans.count ? formatTokens(scans.tokens / scans.count) : "—")}
+      ${statRow("Gem. duur", total.count ? `${Math.round(total.duration / total.count)} ms` : "—")}
+    </dl>
+
+    <h2>Per model</h2>
+    <ul class="ocr-stat-models">${modelRows}</ul>
+    ${costKnown ? "" : `<p class="hint">Kosten worden pas gelogd voor aanvragen na deze update; oudere regels tonen $0.</p>`}
+  `;
+}
+
+async function loadStats() {
+  try {
+    renderStats(await fetchAiRequests());
+  } catch (err) {
+    $("logStats").innerHTML = `<h2>Statistieken</h2><p class="hint">Laden mislukt: ${escapeHtml(err.message.slice(0, 200))}</p>`;
+  }
 }
 
 let timer = null;

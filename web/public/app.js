@@ -671,6 +671,7 @@ async function testOpenRouterVisionModel(apiKey, modelId) {
       model: modelId,
       temperature: 0,
       max_tokens: 16,
+      usage: { include: true },
       messages: [
         {
           role: "user",
@@ -690,8 +691,9 @@ async function testOpenRouterVisionModel(apiKey, modelId) {
     throw new Error(parseOpenRouterErrorBody(raw, res.status));
   }
   const json = raw ? JSON.parse(raw) : {};
-  const reply = json.choices?.[0]?.message?.content?.trim() || "";
-  return reply || "(leeg antwoord — model reageerde wel)";
+  const reply =
+    json.choices?.[0]?.message?.content?.trim() || "(leeg antwoord — model reageerde wel)";
+  return { reply, usage: json.usage || null };
 }
 
 async function runOpenRouterKeyTest() {
@@ -728,7 +730,7 @@ async function runOcrPipelineTest() {
   const model = activeOcrModelId();
   try {
     const keyJson = await testOpenRouterKey(apiKey);
-    const reply = await testOpenRouterVisionModel(apiKey, model);
+    const { reply, usage } = await testOpenRouterVisionModel(apiKey, model);
     await postOcrLog({
       phase: "ui-test-ocr",
       model,
@@ -738,8 +740,12 @@ async function runOcrPipelineTest() {
         model,
         note: "test image 1x1",
       }),
-      response_json: JSON.stringify({ reply: reply.slice(0, 500) }),
+      response_json: JSON.stringify({ reply: reply.slice(0, 500), usage }),
       duration_ms: Date.now() - started,
+      prompt_tokens: Number(usage?.prompt_tokens) || 0,
+      completion_tokens: Number(usage?.completion_tokens) || 0,
+      total_tokens: Number(usage?.total_tokens) || 0,
+      cost: Number(usage?.cost) || 0,
     });
     setOcrFeedback(
       `OCR-test gelukt — ${formatOpenRouterKeyCheck(keyJson)} · model ${shortModelLabel(model)} antwoordde: “${reply.slice(0, 80)}”`,

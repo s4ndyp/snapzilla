@@ -35,8 +35,15 @@
         Controleer: <code>docker compose ps</code> en
         <code>docker compose logs analyzer --tail=30</code>.
       </p>
-      <div class="ocr-log-empty" id="logsEmpty" hidden>Geen logregels — nog geen OCR uitgevoerd.</div>
-      <div class="ocr-log-list" id="logsList"></div>
+      <div class="ocr-log-columns">
+        <section class="ocr-log-main" aria-label="Logregels">
+          <div class="ocr-log-empty" id="logsEmpty" hidden>Geen logregels — nog geen OCR uitgevoerd.</div>
+          <div class="ocr-log-list" id="logsList"></div>
+        </section>
+        <aside class="ocr-log-stats" id="logStats" aria-label="Statistieken">
+          <p class="hint">Statistieken laden…</p>
+        </aside>
+      </div>
     </main>
 
     <script src="/ocr-logs.js" type="module"></script>
