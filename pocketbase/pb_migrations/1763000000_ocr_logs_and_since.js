@@ -69,7 +69,7 @@ migrate(
           max: 50000,
         },
         {
-          name: "error",
+          name: "error_message",
           type: "text",
           required: false,
           max: 2000,

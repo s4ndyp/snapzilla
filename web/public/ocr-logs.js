@@ -29,6 +29,10 @@ function prettyJson(raw) {
   }
 }
 
+function logErrorText(item) {
+  return item.error_message || item.error || "";
+}
+
 function renderLogItem(item) {
   const ok =
     item.success === true ||
@@ -37,6 +41,7 @@ function renderLogItem(item) {
     item.ok === "true";
   const card = document.createElement("article");
   card.className = `ocr-log-card${ok ? "" : " ocr-log-card-error"}`;
+  card.dataset.id = item.id || "";
   const head = document.createElement("header");
   head.className = "ocr-log-card-head";
   head.innerHTML = `
@@ -54,56 +59,116 @@ function renderLogItem(item) {
 
   card.append(head, meta);
 
-  if (item.error) {
+  const errText = logErrorText(item);
+  if (errText) {
     const err = document.createElement("pre");
     err.className = "ocr-log-pre ocr-log-error-text";
-    err.textContent = item.error;
+    err.textContent = errText;
     card.appendChild(err);
   }
 
-  if (item.request_json) {
-    const det = document.createElement("details");
-    det.className = "ocr-log-details";
-    det.innerHTML = `<summary>Request</summary>`;
-    const pre = document.createElement("pre");
-    pre.className = "ocr-log-pre";
-    pre.textContent = prettyJson(item.request_json);
-    det.appendChild(pre);
-    card.appendChild(det);
-  }
+  const reqDet = document.createElement("details");
+  reqDet.className = "ocr-log-details";
+  reqDet.innerHTML = `<summary>Request</summary>`;
+  const reqPre = document.createElement("pre");
+  reqPre.className = "ocr-log-pre";
+  reqPre.textContent = item.request_json
+    ? prettyJson(item.request_json)
+    : "— (laden…) ";
+  reqDet.appendChild(reqPre);
+  reqDet.addEventListener("toggle", () => {
+    if (reqDet.open && item.id && !item.request_json) {
+      void loadLogDetail(item.id).then((full) => {
+        if (full?.request_json) {
+          reqPre.textContent = prettyJson(full.request_json);
+          item.request_json = full.request_json;
+        }
+      });
+    }
+  });
+  card.appendChild(reqDet);
 
-  if (item.response_json) {
-    const det = document.createElement("details");
-    det.className = "ocr-log-details";
-    det.innerHTML = `<summary>Response</summary>`;
-    const pre = document.createElement("pre");
-    pre.className = "ocr-log-pre";
-    pre.textContent = prettyJson(item.response_json);
-    det.appendChild(pre);
-    card.appendChild(det);
-  }
+  const resDet = document.createElement("details");
+  resDet.className = "ocr-log-details";
+  resDet.innerHTML = `<summary>Response</summary>`;
+  const resPre = document.createElement("pre");
+  resPre.className = "ocr-log-pre";
+  resPre.textContent = item.response_json
+    ? prettyJson(item.response_json)
+    : "— (laden…) ";
+  resDet.appendChild(resPre);
+  resDet.addEventListener("toggle", () => {
+    if (resDet.open && item.id && !item.response_json) {
+      void loadLogDetail(item.id).then((full) => {
+        if (full?.response_json) {
+          resPre.textContent = prettyJson(full.response_json);
+          item.response_json = full.response_json;
+        }
+      });
+    }
+  });
+  card.appendChild(resDet);
 
   return card;
 }
 
+async function loadLogDetail(id) {
+  const res = await fetch(`${API}/collections/${LOG_COLLECTION}/records/${id}`);
+  if (!res.ok) return null;
+  return res.json();
+}
+
+async function fetchLogList() {
+  const attempts = [
+    {
+      page: "1",
+      perPage: "50",
+      sort: "-created",
+      fields:
+        "id,created,phase,model,success,ok,screenshot_id,duration_ms,error_message,error",
+    },
+    { page: "1", perPage: "50", sort: "-updated" },
+    { page: "1", perPage: "50" },
+  ];
+
+  let lastBody = "";
+  for (const base of attempts) {
+    const params = new URLSearchParams(base);
+    const res = await fetch(
+      `${API}/collections/${LOG_COLLECTION}/records?${params}`,
+    );
+    lastBody = await res.text();
+    if (res.ok) {
+      return JSON.parse(lastBody);
+    }
+    if (res.status === 404) {
+      return { missing: true };
+    }
+  }
+
+  const metaRes = await fetch(`${API}/collections/${LOG_COLLECTION}`);
+  const metaText = metaRes.ok
+    ? "collectie bestaat"
+    : `collectie-meta HTTP ${metaRes.status}`;
+  throw new Error(
+    `${lastBody.slice(0, 280)} (${metaText}). Draai: bash scripts/pb-migrate.sh`,
+  );
+}
+
 async function loadLogs() {
-  const params = new URLSearchParams({
-    page: "1",
-    perPage: "80",
-    sort: "-created",
-  });
-  const res = await fetch(`${API}/collections/${LOG_COLLECTION}/records?${params}`);
-  if (res.status === 404) {
+  const json = await fetchLogList();
+  if (json.missing) {
     $("logsEmpty").hidden = false;
     $("logsEmpty").textContent =
       "Collectie ocr_logs ontbreekt — op de server: bash scripts/pb-migrate.sh";
     $("logsList").innerHTML = "";
     return;
   }
-  if (!res.ok) throw new Error(await res.text());
-  const json = await res.json();
   const items = json.items || [];
   $("logsEmpty").hidden = items.length > 0;
+  if (!items.length) {
+    $("logsEmpty").textContent = "Geen logregels — nog geen OCR uitgevoerd.";
+  }
   const list = $("logsList");
   list.innerHTML = "";
   for (const item of items) {
@@ -123,7 +188,10 @@ function setupAutoRefresh() {
 }
 
 $("refreshLogsBtn")?.addEventListener("click", () => {
-  void loadLogs().catch((err) => alert(err.message));
+  void loadLogs().catch((err) => {
+    $("logsEmpty").hidden = false;
+    $("logsEmpty").textContent = `Laden mislukt: ${err.message}`;
+  });
 });
 $("autoRefresh")?.addEventListener("change", setupAutoRefresh);
 
