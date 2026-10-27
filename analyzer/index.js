@@ -413,7 +413,7 @@ async function analyzeRecord(record) {
 async function pollOnce() {
   const pendingFilter = encodeURIComponent("analyzed != true");
   const res = await pbFetch(
-    `/api/collections/screenshots/records?perPage=5&filter=${pendingFilter}&sort=-created`,
+    `/api/collections/screenshots/records?perPage=5&filter=${pendingFilter}&sort=-captured_at`,
   );
   const json = await res.json();
   for (const item of json.items || []) {
