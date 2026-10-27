@@ -1,5 +1,8 @@
 const API = "/api";
 const LOG_COLLECTION = "ocr_logs";
+const SETTINGS_COLLECTION = "snapzilla_settings";
+
+let settingsRecord = null;
 
 const $ = (id) => document.getElementById(id);
 
@@ -220,6 +223,10 @@ function formatCost(n) {
   return `$${n.toFixed(4)}`;
 }
 
+function emptySummary() {
+  return { count: 0, ok: 0, prompt: 0, completion: 0, tokens: 0, cost: 0, duration: 0 };
+}
+
 function summarize(items) {
   return items.reduce(
     (acc, it) => {
@@ -232,37 +239,158 @@ function summarize(items) {
       acc.duration += num(it.duration_ms);
       return acc;
     },
-    { count: 0, ok: 0, prompt: 0, completion: 0, tokens: 0, cost: 0, duration: 0 },
+    emptySummary(),
   );
+}
+
+function addSummaries(a, b) {
+  const out = emptySummary();
+  for (const key of Object.keys(out)) {
+    out[key] = num(a[key]) + num(b[key]);
+  }
+  return out;
+}
+
+function snapshotLast(item) {
+  return {
+    created: item.created,
+    model: item.model,
+    success: item.success,
+    prompt_tokens: item.prompt_tokens,
+    completion_tokens: item.completion_tokens,
+    total_tokens: item.total_tokens,
+    cost: item.cost,
+    duration_ms: item.duration_ms,
+  };
+}
+
+function mergeByModel(archived, items) {
+  const map = new Map();
+  if (archived && typeof archived === "object") {
+    for (const [model, raw] of Object.entries(archived)) {
+      map.set(model, { ...emptySummary(), ...raw });
+    }
+  }
+  for (const it of items) {
+    const key = it.model || "onbekend";
+    const prev = map.get(key) || emptySummary();
+    map.set(key, addSummaries(prev, summarize([it])));
+  }
+  return Object.fromEntries(map);
+}
+
+async function ensureSettings() {
+  if (settingsRecord?.id) return settingsRecord;
+  const res = await fetch(`${API}/collections/${SETTINGS_COLLECTION}/records?perPage=1`);
+  if (!res.ok) throw new Error(await res.text());
+  const json = await res.json();
+  settingsRecord = json.items?.[0] || null;
+  return settingsRecord;
+}
+
+async function fetchAllLogIds() {
+  const ids = [];
+  for (let page = 1; page <= 100; page++) {
+    const params = new URLSearchParams({
+      page: String(page),
+      perPage: "200",
+      fields: "id",
+    });
+    const res = await fetch(`${API}/collections/${LOG_COLLECTION}/records?${params}`);
+    if (!res.ok) throw new Error(await res.text());
+    const json = await res.json();
+    for (const item of json.items || []) {
+      if (item.id) ids.push(item.id);
+    }
+    if (page >= (json.totalPages || 1)) break;
+  }
+  return ids;
+}
+
+async function clearOcrLog() {
+  if (
+    !confirm(
+      "Alle logregels wissen? De totalen in Statistieken blijven bewaard (inclusief wat je nu ziet).",
+    )
+  ) {
+    return;
+  }
+  const btn = $("clearLogsBtn");
+  if (btn) btn.disabled = true;
+  try {
+    const items = await fetchAiRequests();
+    const settings = await ensureSettings();
+    if (!settings?.id) throw new Error("snapzilla_settings niet gevonden");
+
+    const prev = settings.ocr_stats_archive || {};
+    const openrouterOk = items.filter((i) => i.phase === "openrouter" && isSuccess(i));
+    const merged = {
+      totals: addSummaries(prev.totals || emptySummary(), summarize(items)),
+      last: items[0] ? snapshotLast(items[0]) : prev.last || null,
+      byModel: mergeByModel(prev.byModel, items),
+      scans: addSummaries(prev.scans || emptySummary(), summarize(openrouterOk)),
+    };
+
+    const patchRes = await fetch(
+      `${API}/collections/${SETTINGS_COLLECTION}/records/${settings.id}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ocr_stats_archive: merged }),
+      },
+    );
+    if (!patchRes.ok) throw new Error(await patchRes.text());
+    settingsRecord = { ...settings, ocr_stats_archive: merged };
+
+    for (const id of await fetchAllLogIds()) {
+      const del = await fetch(`${API}/collections/${LOG_COLLECTION}/records/${id}`, {
+        method: "DELETE",
+      });
+      if (!del.ok) throw new Error(await del.text());
+    }
+
+    await loadLogs();
+  } catch (err) {
+    alert(`Log wissen mislukt: ${err.message}`);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 function statRow(label, value) {
   return `<div class="ocr-stat-row"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`;
 }
 
-function renderStats(items) {
+function renderStats(items, archive) {
   const el = $("logStats");
   if (!el) return;
-  if (!items.length) {
+
+  const archivedTotals = archive?.totals
+    ? { ...emptySummary(), ...archive.totals }
+    : emptySummary();
+  const current = summarize(items);
+  const total = addSummaries(archivedTotals, current);
+  const hasArchive = num(archivedTotals.count) > 0;
+
+  if (!items.length && !hasArchive) {
     el.innerHTML = `<h2>Statistieken</h2><p class="hint">Nog geen AI-aanvragen gelogd.</p>`;
     return;
   }
 
-  const last = items[0];
-  const total = summarize(items);
-  const scans = summarize(items.filter((i) => i.phase === "openrouter" && isSuccess(i)));
+  const last = items[0] || archive?.last || null;
+  const scansCurrent = summarize(
+    items.filter((i) => i.phase === "openrouter" && isSuccess(i)),
+  );
+  const scansArchived = num(archive?.scans?.count);
+  const scansCount = scansCurrent.count + scansArchived;
   const today = new Date().toISOString().slice(0, 10);
   const todaySum = summarize(items.filter((i) => String(i.created || "").slice(0, 10) === today));
-  const costKnown = items.some((i) => num(i.cost) > 0);
+  const costKnown =
+    items.some((i) => num(i.cost) > 0) || num(archivedTotals.cost) > 0;
 
-  const byModel = new Map();
-  for (const it of items) {
-    const key = it.model || "onbekend";
-    if (!byModel.has(key)) byModel.set(key, []);
-    byModel.get(key).push(it);
-  }
-  const modelRows = [...byModel.entries()]
-    .map(([model, list]) => ({ model, s: summarize(list) }))
+  const byModel = mergeByModel(archive?.byModel, items);
+  const modelRows = Object.entries(byModel)
+    .map(([model, s]) => ({ model, s }))
     .sort((a, b) => b.s.cost - a.s.cost || b.s.tokens - a.s.tokens)
     .map(
       ({ model, s }) =>
@@ -270,7 +398,8 @@ function renderStats(items) {
     )
     .join("");
 
-  el.innerHTML = `
+  const lastBlock = last
+    ? `
     <h2>Laatste aanvraag</h2>
     <dl class="ocr-stat-list">
       ${statRow("Tijd", formatWhen(last.created))}
@@ -279,8 +408,11 @@ function renderStats(items) {
       ${statRow("Tokens", `${formatTokens(num(last.total_tokens))} (in ${formatTokens(num(last.prompt_tokens))} / uit ${formatTokens(num(last.completion_tokens))})`)}
       ${statRow("Kosten", formatCost(num(last.cost)))}
       ${statRow("Duur", last.duration_ms != null ? `${num(last.duration_ms)} ms` : "—")}
-    </dl>
+    </dl>`
+    : `<h2>Laatste aanvraag</h2><p class="hint">Geen recente regel in het log (totalen hieronder zijn wel bewaard).</p>`;
 
+  el.innerHTML = `
+    ${lastBlock}
     <h2>Totaal</h2>
     <dl class="ocr-stat-list">
       ${statRow("Aanvragen", `${total.count} (${total.ok} OK, ${total.count - total.ok} fout)`)}
@@ -291,21 +423,32 @@ function renderStats(items) {
     <h2>Extra</h2>
     <dl class="ocr-stat-list">
       ${statRow("Vandaag", `${todaySum.count} aanvragen · ${formatTokens(todaySum.tokens)} tokens · ${formatCost(todaySum.cost)}`)}
-      ${statRow("Gescande screenshots", String(scans.count))}
-      ${statRow("Gem. kosten per screenshot", scans.count ? formatCost(scans.cost / scans.count) : "—")}
-      ${statRow("Gem. tokens per screenshot", scans.count ? formatTokens(scans.tokens / scans.count) : "—")}
+      ${statRow("Gescande screenshots", String(scansCount))}
+      ${statRow(
+        "Gem. kosten per screenshot",
+        scansCount ? formatCost((scansCurrent.cost + num(archive?.scans?.cost)) / scansCount) : "—",
+      )}
+      ${statRow(
+        "Gem. tokens per screenshot",
+        scansCount
+          ? formatTokens((scansCurrent.tokens + num(archive?.scans?.tokens)) / scansCount)
+          : "—",
+      )}
       ${statRow("Gem. duur", total.count ? `${Math.round(total.duration / total.count)} ms` : "—")}
     </dl>
 
     <h2>Per model</h2>
-    <ul class="ocr-stat-models">${modelRows}</ul>
+    <ul class="ocr-stat-models">${modelRows || "<li class=\"hint\">—</li>"}</ul>
+    ${hasArchive ? `<p class="hint">${Math.round(archivedTotals.count)} aanvragen staan in het totaal uit een eerder gewist log.</p>` : ""}
     ${costKnown ? "" : `<p class="hint">Kosten worden pas gelogd voor aanvragen na deze update; oudere regels tonen $0.</p>`}
   `;
 }
 
 async function loadStats() {
   try {
-    renderStats(await fetchAiRequests());
+    const settings = await ensureSettings();
+    const archive = settings?.ocr_stats_archive || null;
+    renderStats(await fetchAiRequests(), archive);
   } catch (err) {
     $("logStats").innerHTML = `<h2>Statistieken</h2><p class="hint">Laden mislukt: ${escapeHtml(err.message.slice(0, 200))}</p>`;
   }
@@ -321,6 +464,10 @@ function setupAutoRefresh() {
     }, 5000);
   }
 }
+
+$("clearLogsBtn")?.addEventListener("click", () => {
+  void clearOcrLog();
+});
 
 $("refreshLogsBtn")?.addEventListener("click", () => {
   void loadLogs().catch((err) => {
