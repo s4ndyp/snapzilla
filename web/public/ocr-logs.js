@@ -158,6 +158,23 @@ async function fetchLogList() {
   );
 }
 
+const SINGLETON_LOG_PHASES = new Set(["poll", "analyzer-start"]);
+
+/** Show only the newest poll / analyzer-start row (list is sort -created). */
+function dedupeSingletonLogPhases(items) {
+  const seen = new Set();
+  const out = [];
+  for (const item of items) {
+    const phase = String(item.phase || "").toLowerCase();
+    if (SINGLETON_LOG_PHASES.has(phase)) {
+      if (seen.has(phase)) continue;
+      seen.add(phase);
+    }
+    out.push(item);
+  }
+  return out;
+}
+
 async function loadLogs() {
   const json = await fetchLogList();
   if (json.missing) {
@@ -167,7 +184,7 @@ async function loadLogs() {
     $("logsList").innerHTML = "";
     return;
   }
-  const items = json.items || [];
+  const items = dedupeSingletonLogPhases(json.items || []);
   $("logsEmpty").hidden = items.length > 0;
   if (!items.length) {
     $("logsEmpty").textContent = "Geen logregels — nog geen OCR uitgevoerd.";
