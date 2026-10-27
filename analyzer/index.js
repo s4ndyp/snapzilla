@@ -42,7 +42,7 @@ function filePath(record, filename) {
   return `/api/files/screenshots/${record.id}/${encodeURIComponent(filename)}`;
 }
 
-async function writeOcrLog(entry) {
+function ocrLogFormBody(entry) {
   const body = new FormData();
   for (const [k, v] of Object.entries(entry)) {
     if (v === undefined || v === null) continue;
@@ -51,35 +51,108 @@ async function writeOcrLog(entry) {
     if (k === "error") key = "error_message";
     body.append(key, typeof v === "boolean" ? (v ? "true" : "false") : String(v));
   }
+  return body;
+}
+
+async function writeOcrLog(entry) {
   try {
-    await pbFetch("/api/collections/ocr_logs/records", { method: "POST", body });
+    await pbFetch("/api/collections/ocr_logs/records", {
+      method: "POST",
+      body: ocrLogFormBody(entry),
+    });
   } catch (err) {
     console.warn("[ocr-log] write failed:", err.message);
   }
 }
 
-/** Keep at most one log row per phase (e.g. poll errors). */
-async function replaceOcrLogForPhase(phase, entry) {
-  try {
-    const filter = encodeURIComponent(`phase = "${phase}"`);
-    for (let page = 1; page <= 20; page++) {
-      const res = await pbFetch(
-        `/api/collections/ocr_logs/records?perPage=200&page=${page}&filter=${filter}&fields=id`,
+async function patchOcrLog(id, entry) {
+  await pbFetch(`/api/collections/ocr_logs/records/${id}`, {
+    method: "PATCH",
+    body: ocrLogFormBody(entry),
+  });
+}
+
+/** @type {Map<string, string>} */
+const singletonLogIds = new Map();
+
+async function listOcrLogIdsForPhase(phase) {
+  const ids = [];
+  const filter = encodeURIComponent(`phase = "${phase}"`);
+  for (let page = 1; page <= 50; page++) {
+    let res;
+    try {
+      res = await pbFetch(
+        `/api/collections/ocr_logs/records?perPage=200&page=${page}&sort=-created&filter=${filter}&fields=id`,
       );
-      const json = await res.json();
-      for (const item of json.items || []) {
-        if (item.id) {
-          await pbFetch(`/api/collections/ocr_logs/records/${item.id}`, {
-            method: "DELETE",
-          });
-        }
-      }
-      if (page >= (json.totalPages || 1)) break;
+    } catch {
+      break;
     }
-  } catch (err) {
-    console.warn(`[ocr-log] cleanup phase=${phase}:`, err.message);
+    const json = await res.json();
+    for (const item of json.items || []) {
+      if (item.id) ids.push(item.id);
+    }
+    if (page >= (json.totalPages || 1)) break;
   }
-  await writeOcrLog({ phase, ...entry });
+  return ids;
+}
+
+async function deleteOcrLogIds(ids) {
+  for (const id of ids) {
+    try {
+      await pbFetch(`/api/collections/ocr_logs/records/${id}`, {
+        method: "DELETE",
+      });
+    } catch {
+      /* best effort */
+    }
+  }
+}
+
+/** One row per phase — update in place when possible (poll errors, analyzer-start). */
+async function upsertSingletonPhaseLog(phase, entry) {
+  const payload = { phase, ...entry };
+  const cachedId = singletonLogIds.get(phase);
+
+  if (cachedId) {
+    try {
+      await patchOcrLog(cachedId, payload);
+      const extras = (await listOcrLogIdsForPhase(phase)).filter(
+        (id) => id !== cachedId,
+      );
+      await deleteOcrLogIds(extras);
+      return;
+    } catch {
+      singletonLogIds.delete(phase);
+    }
+  }
+
+  let ids = [];
+  try {
+    ids = await listOcrLogIdsForPhase(phase);
+  } catch (err) {
+    console.warn(`[ocr-log] list phase=${phase}:`, err.message);
+  }
+
+  if (ids.length > 0) {
+    const keep = ids[0];
+    try {
+      await patchOcrLog(keep, payload);
+      singletonLogIds.set(phase, keep);
+      await deleteOcrLogIds(ids.slice(1));
+      return;
+    } catch (err) {
+      console.warn(`[ocr-log] patch phase=${phase}:`, err.message);
+    }
+  }
+
+  await deleteOcrLogIds(ids);
+  try {
+    await writeOcrLog(payload);
+    const fresh = await listOcrLogIdsForPhase(phase);
+    if (fresh[0]) singletonLogIds.set(phase, fresh[0]);
+  } catch (err) {
+    console.warn(`[ocr-log] upsert phase=${phase}:`, err.message);
+  }
 }
 
 function usageFields(usage) {
@@ -544,26 +617,14 @@ async function pollOnce() {
   }
 }
 
-const POLL_ERROR_LOG_MS = 60_000;
-let lastPollErrorLog = { message: "", ts: 0 };
-
 async function logPollError(message) {
-  const now = Date.now();
-  if (
-    message === lastPollErrorLog.message &&
-    now - lastPollErrorLog.ts < POLL_ERROR_LOG_MS
-  ) {
-    return;
-  }
-  lastPollErrorLog = { message, ts: now };
-  await replaceOcrLogForPhase("poll", { ok: false, error: message });
+  await upsertSingletonPhaseLog("poll", { ok: false, error: message });
 }
 
 async function main() {
   console.log(`Snapzilla analyzer → ${PB} (poll ${POLL_MS}ms)`);
   const { model, apiKey, ocrEnabledSince } = await fetchSnapzillaSettings();
-  await writeOcrLog({
-    phase: "analyzer-start",
+  await upsertSingletonPhaseLog("analyzer-start", {
     model,
     ok: true,
     response_json: JSON.stringify({
