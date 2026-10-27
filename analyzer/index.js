@@ -58,6 +58,16 @@ async function writeOcrLog(entry) {
   }
 }
 
+function usageFields(usage) {
+  if (!usage) return {};
+  return {
+    prompt_tokens: Number(usage.prompt_tokens) || 0,
+    completion_tokens: Number(usage.completion_tokens) || 0,
+    total_tokens: Number(usage.total_tokens) || 0,
+    cost: Number(usage.cost) || 0,
+  };
+}
+
 function recordCreatedAt(record) {
   const raw = record.captured_at || record.created;
   if (!raw) return null;
@@ -211,6 +221,7 @@ async function runOpenRouterOcr(buffer, modelId, screenshotId = "") {
       body: JSON.stringify({
         model,
         temperature: 0,
+        usage: { include: true },
         messages: [
           {
             role: "user",
@@ -255,6 +266,7 @@ async function runOpenRouterOcr(buffer, modelId, screenshotId = "") {
       request_json: JSON.stringify(requestPayload),
       response_json: JSON.stringify(safeResponse),
       duration_ms,
+      ...usageFields(json.usage),
     });
 
     const raw =
