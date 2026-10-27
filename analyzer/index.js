@@ -38,8 +38,8 @@ async function pbFetch(path, options = {}) {
   return res;
 }
 
-function fileUrl(record, filename) {
-  return `${PB}/api/files/screenshots/${record.id}/${filename}`;
+function filePath(record, filename) {
+  return `/api/files/screenshots/${record.id}/${encodeURIComponent(filename)}`;
 }
 
 async function writeOcrLog(entry) {
@@ -338,7 +338,7 @@ async function analyzeRecord(record) {
   const settings = await fetchSnapzillaSettings();
 
   try {
-    const res = await pbFetch(fileUrl(record, imageName));
+    const res = await pbFetch(filePath(record, imageName));
     const buffer = Buffer.from(await res.arrayBuffer());
 
     const meta = await sharp(buffer).metadata();
