@@ -271,10 +271,16 @@ async function fetchOcrModelFromServer() {
   return (await fetchSnapzillaSettings()).model;
 }
 
-const OCR_PROMPT = `Extract all readable text from this screenshot image.
-Return only the extracted text, preserving line breaks and reading order.
-Include UI labels, window titles, buttons, and body text.
-Do not add markdown, quotes, or commentary.
+const OCR_PROMPT = `Extract all readable content from this screenshot as Markdown (GitHub-flavored).
+
+Rules:
+- Preserve reading order: headings (#), lists, paragraphs, emphasis where visible.
+- Tables: detect grid/table layouts and reproduce as Markdown tables with a header row and | separators.
+- Buttons, labels, and window titles as plain text or small headings, not as commentary.
+- Code or monospaced blocks: use fenced \`\`\` blocks only when the UI shows code.
+- Do not wrap the entire answer in a markdown code fence.
+- No introduction or explanation outside the document content.
+
 If there is no readable text, reply with exactly: [empty]`;
 
 const OCR_PROMPT_WITH_TITLE = `${OCR_PROMPT}
@@ -284,24 +290,32 @@ Also suggest a short title in Dutch (max 80 characters) that describes this scre
 Use exactly this format:
 TITLE: <title suggestion>
 TEXT:
-<extracted text>`;
+<markdown content>`;
+
+function stripOuterMarkdownFence(s) {
+  const t = String(s || "").trim();
+  const m = t.match(/^```(?:markdown|md)?\s*\n?([\s\S]*?)\n?```\s*$/i);
+  return m ? m[1].trim() : t;
+}
 
 function parseOcrResponse(raw, wantTitle) {
   if (!raw || raw === "[empty]") {
     return { text: "", title: "", status: "empty" };
   }
   if (!wantTitle) {
-    return { text: raw.slice(0, OCR_TEXT_MAX), title: "", status: "done" };
+    const text = stripOuterMarkdownFence(raw).slice(0, OCR_TEXT_MAX);
+    return { text, title: "", status: text ? "done" : "empty" };
   }
   const titleLine = raw.match(/^TITLE:\s*(.+)$/im);
   const textBlock = raw.match(/\nTEXT:\s*\n?([\s\S]*)$/im);
   const title = (titleLine?.[1] || "").trim().slice(0, 80);
-  const text = (textBlock?.[1] || raw).trim();
+  let text = stripOuterMarkdownFence((textBlock?.[1] || raw).trim());
   if (!text || text === "[empty]") {
     return { text: "", title, status: "empty" };
   }
+  text = text.slice(0, OCR_TEXT_MAX);
   return {
-    text: text.slice(0, OCR_TEXT_MAX),
+    text,
     title,
     status: "done",
   };

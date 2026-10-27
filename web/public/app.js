@@ -1,3 +1,5 @@
+import { renderOcrMarkdown } from "./ocr-markdown.js";
+
 const API = "/api";
 const COLLECTION = "screenshots";
 const SETTINGS_COLLECTION = "snapzilla_settings";
@@ -197,8 +199,8 @@ function renderLightboxOcrPanel(item) {
     requestAnimationFrame(sizeLightboxImageBelow);
     return;
   }
-  $("lightboxOcrText").textContent = text;
-  $("lightboxOcrCount").textContent = `${text.length} tekens`;
+  $("lightboxOcrText").innerHTML = renderOcrMarkdown(text);
+  $("lightboxOcrCount").textContent = `Markdown · ${text.length} tekens`;
   panel.hidden = !state.ocrPanelOpen;
   btn.textContent = state.ocrPanelOpen ? "OCR-resultaat verbergen" : "OCR-resultaat";
   btn.setAttribute("aria-expanded", state.ocrPanelOpen ? "true" : "false");
@@ -219,7 +221,7 @@ function bindLightboxOcrPanel() {
     const text = state.items[state.lightboxIndex]?.ocr_text || "";
     try {
       await navigator.clipboard.writeText(text);
-      showToast("OCR-tekst gekopieerd");
+      showToast("OCR-markdown gekopieerd");
     } catch {
       showToast("Kopiëren mislukt", true);
     }
