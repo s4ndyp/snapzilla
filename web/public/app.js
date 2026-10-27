@@ -160,15 +160,6 @@ function renderOcrBadgeHtml(item) {
   return `<span class="shot-ocr-badge shot-ocr-${ocr.status}" title="${escapeHtml(ocr.detail.slice(0, 200))}">${escapeHtml(ocr.label)}</span>`;
 }
 
-function renderLightboxOcrHtml(item) {
-  const ocr = describeOcr(item);
-  const pill = `<span class="ocr-status-pill ocr-pill-${ocr.status}">${escapeHtml(ocr.label)}</span>`;
-  if (ocr.status === "done") {
-    return `${pill}<span class="hint">${ocr.detail.length} tekens — knop OCR-resultaat onder de afbeelding</span>`;
-  }
-  return `${pill}<span class="hint">${escapeHtml(ocr.detail)}</span>`;
-}
-
 function lightboxImageBox() {
   const canvas = $("lightboxCanvas");
   const el = canvas && !canvas.hidden ? canvas : $("lightboxImg");
@@ -176,13 +167,40 @@ function lightboxImageBox() {
   return rect && rect.width > 0 ? rect : null;
 }
 
-function sizeLightboxOcrPanel() {
-  const panel = $("lightboxOcrPanel");
-  if (!panel || panel.hidden) return;
+function sizeLightboxImageBelow() {
   const box = lightboxImageBox();
   if (!box) return;
-  panel.style.width = `${Math.max(box.width, 320)}px`;
-  panel.style.height = "";
+  const w = `${Math.max(box.width, 320)}px`;
+  const panel = $("lightboxOcrPanel");
+  if (panel && !panel.hidden) {
+    panel.style.width = w;
+    panel.style.height = "";
+  }
+  const meta = $("lightboxImageMeta");
+  if (meta) meta.style.width = w;
+}
+
+function renderLightboxImageMeta(item) {
+  const bar = $("lightboxImageMeta");
+  const dateEl = $("lightboxImageDate");
+  const ocrEl = $("lightboxImageOcr");
+  if (!bar || !dateEl || !ocrEl || !item) return;
+
+  dateEl.textContent = formatDate(item.captured_at || item.created);
+
+  const ocr = describeOcr(item);
+  if (ocr.status === "unknown") {
+    ocrEl.innerHTML = "";
+    ocrEl.hidden = true;
+  } else {
+    ocrEl.hidden = false;
+    const tip =
+      ocr.status === "done"
+        ? `${ocr.label} · ${ocr.detail.length} tekens`
+        : ocr.detail.slice(0, 160);
+    ocrEl.innerHTML = `<span class="shot-ocr-badge shot-ocr-${ocr.status}" title="${escapeHtml(tip)}">${escapeHtml(ocr.label)}</span>`;
+  }
+  requestAnimationFrame(sizeLightboxImageBelow);
 }
 
 function renderLightboxOcrPanel(item) {
@@ -201,7 +219,7 @@ function renderLightboxOcrPanel(item) {
   panel.hidden = !state.ocrPanelOpen;
   btn.textContent = state.ocrPanelOpen ? "OCR-resultaat verbergen" : "OCR-resultaat";
   btn.setAttribute("aria-expanded", state.ocrPanelOpen ? "true" : "false");
-  if (state.ocrPanelOpen) requestAnimationFrame(sizeLightboxOcrPanel);
+  if (state.ocrPanelOpen) requestAnimationFrame(sizeLightboxImageBelow);
 }
 
 function bindLightboxOcrPanel() {
@@ -223,7 +241,7 @@ function bindLightboxOcrPanel() {
       showToast("Kopiëren mislukt", true);
     }
   });
-  window.addEventListener("resize", sizeLightboxOcrPanel);
+  window.addEventListener("resize", sizeLightboxImageBelow);
 }
 
 function formatBytes(n) {
@@ -2095,10 +2113,9 @@ function refreshLightbox() {
       <dt>Modus</dt><dd>${escapeHtml(item.capture_mode || "—")}</dd>
       <dt>Kleuren</dt><dd>${colorHtml || "—"}</dd>
       <dt>pHash</dt><dd>${escapeHtml(item.phash || "—")}</dd>
-      <dt>OCR</dt><dd class="ocr-meta-dd">${renderLightboxOcrHtml(item)}</dd>
       ${
         canRetryOcr(item)
-          ? `<dt></dt><dd><button type="button" class="btn btn-ghost btn-sm" id="lbOcrRetry">OCR opnieuw proberen</button></dd>`
+          ? `<dt>OCR</dt><dd><button type="button" class="btn btn-ghost btn-sm" id="lbOcrRetry">OCR opnieuw proberen</button><p class="hint">Status staat onder de afbeelding.</p></dd>`
           : ""
       }
       <dt>Notities</dt>
@@ -2111,11 +2128,12 @@ function refreshLightbox() {
   `;
 
   renderLightboxShotActions(item);
+  renderLightboxImageMeta(item);
   renderLightboxOcrPanel(item);
   bindLightboxCanvas(item);
   setActiveEditTool(state.editTool);
   void startLightboxEdit(item)
-    .then(() => requestAnimationFrame(sizeLightboxOcrPanel))
+    .then(() => requestAnimationFrame(sizeLightboxImageBelow))
     .catch((err) => showToast(err.message, true));
 
   $("notesEditor")?.addEventListener("blur", async (e) => {
@@ -2217,11 +2235,9 @@ async function reload(append = false, options = {}) {
     renderSidebarLists();
     renderGallery();
     if (lightboxOpen && lightboxId && state.lightboxIndex >= 0) {
-      const dd = document.querySelector(".ocr-meta-dd");
-      if (dd) {
-        dd.innerHTML = renderLightboxOcrHtml(state.items[state.lightboxIndex]);
-      }
-      renderLightboxOcrPanel(state.items[state.lightboxIndex]);
+      const lbItem = state.items[state.lightboxIndex];
+      renderLightboxImageMeta(lbItem);
+      renderLightboxOcrPanel(lbItem);
     }
     scheduleAnalysisPoll();
   } catch (err) {
