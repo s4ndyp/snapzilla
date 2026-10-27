@@ -265,7 +265,7 @@
               <span class="hint" id="lightboxOcrCount"></span>
               <button type="button" class="btn btn-ghost btn-sm" id="lbOcrCopy">Kopieer</button>
             </header>
-            <pre class="lightbox-ocr-text" id="lightboxOcrText"></pre>
+            <div class="lightbox-ocr-text lightbox-ocr-markdown" id="lightboxOcrText"></div>
           </section>
           <figcaption id="lightboxCaption"></figcaption>
         </figure>
@@ -404,6 +404,8 @@
       <a href="/client-setup.html" id="clientSetupLink">Windows-client</a>
     </footer>
 
+    <script src="/vendor/purify.min.js"></script>
+    <script src="/vendor/marked.min.js"></script>
     <script src="/app.js" type="module"></script>
   </body>
 </html>

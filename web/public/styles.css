@@ -1746,11 +1746,98 @@ body {
   font-family: inherit;
   font-size: 0.92rem;
   line-height: 1.55;
-  white-space: pre-wrap;
   word-break: break-word;
   user-select: text;
-  color: #7dd3fc;
+  color: #cbd5e1;
   background: #06080c;
+}
+
+.lightbox-ocr-markdown h1,
+.lightbox-ocr-markdown h2,
+.lightbox-ocr-markdown h3 {
+  color: #e2e8f0;
+  margin: 0.75rem 0 0.35rem;
+  font-size: 1.05em;
+  line-height: 1.35;
+}
+
+.lightbox-ocr-markdown h1:first-child,
+.lightbox-ocr-markdown h2:first-child,
+.lightbox-ocr-markdown h3:first-child {
+  margin-top: 0;
+}
+
+.lightbox-ocr-markdown p {
+  margin: 0.35rem 0;
+}
+
+.lightbox-ocr-markdown ul,
+.lightbox-ocr-markdown ol {
+  margin: 0.35rem 0;
+  padding-left: 1.35rem;
+}
+
+.lightbox-ocr-markdown table {
+  width: 100%;
+  margin: 0.65rem 0;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+}
+
+.lightbox-ocr-markdown th,
+.lightbox-ocr-markdown td {
+  border: 1px solid #334155;
+  padding: 0.35rem 0.55rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.lightbox-ocr-markdown th {
+  background: #1e293b;
+  color: #7dd3fc;
+  font-weight: 600;
+}
+
+.lightbox-ocr-markdown td {
+  color: #cbd5e1;
+}
+
+.lightbox-ocr-markdown tr:nth-child(even) td {
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.lightbox-ocr-markdown code {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.88em;
+  background: #1e293b;
+  color: #7dd3fc;
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.lightbox-ocr-markdown pre {
+  margin: 0.5rem 0;
+  padding: 0.65rem 0.75rem;
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 6px;
+  overflow-x: auto;
+}
+
+.lightbox-ocr-markdown pre code {
+  background: transparent;
+  padding: 0;
+}
+
+.lightbox-ocr-markdown a {
+  color: #6b9fff;
+}
+
+.lightbox-ocr-markdown blockquote {
+  margin: 0.5rem 0;
+  padding-left: 0.75rem;
+  border-left: 3px solid #475569;
+  color: #94a3b8;
 }
 
 .lightbox-ocr-head .hint {
