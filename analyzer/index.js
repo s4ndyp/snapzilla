@@ -180,13 +180,49 @@ Include UI labels, window titles, buttons, and body text.
 Do not add markdown, quotes, or commentary.
 If there is no readable text, reply with exactly: [empty]`;
 
-async function runOpenRouterOcr(buffer, modelId, screenshotId = "") {
+const OCR_PROMPT_WITH_TITLE = `${OCR_PROMPT}
+
+Also suggest a short title in Dutch (max 80 characters) that describes this screenshot.
+
+Use exactly this format:
+TITLE: <title suggestion>
+TEXT:
+<extracted text>`;
+
+function parseOcrResponse(raw, wantTitle) {
+  if (!raw || raw === "[empty]") {
+    return { text: "", title: "", status: "empty" };
+  }
+  if (!wantTitle) {
+    return { text: raw.slice(0, OCR_TEXT_MAX), title: "", status: "done" };
+  }
+  const titleLine = raw.match(/^TITLE:\s*(.+)$/im);
+  const textBlock = raw.match(/\nTEXT:\s*\n?([\s\S]*)$/im);
+  const title = (titleLine?.[1] || "").trim().slice(0, 80);
+  const text = (textBlock?.[1] || raw).trim();
+  if (!text || text === "[empty]") {
+    return { text: "", title, status: "empty" };
+  }
+  return {
+    text: text.slice(0, OCR_TEXT_MAX),
+    title,
+    status: "done",
+  };
+}
+
+async function runOpenRouterOcr(
+  buffer,
+  modelId,
+  screenshotId = "",
+  wantTitle = false,
+) {
   const apiKey = await resolveOpenRouterApiKey();
   if (!apiKey) {
-    return { text: "", status: "no_key" };
+    return { text: "", status: "no_key", title: "" };
   }
 
   const model = modelId || (await fetchOcrModelFromServer());
+  const prompt = wantTitle ? OCR_PROMPT_WITH_TITLE : OCR_PROMPT;
   const jpeg = await prepareVisionImage(buffer);
   const b64 = jpeg.toString("base64");
   const dataUrl = `data:image/jpeg;base64,${b64}`;
@@ -198,7 +234,7 @@ async function runOpenRouterOcr(buffer, modelId, screenshotId = "") {
       {
         role: "user",
         content: [
-          { type: "text", text: OCR_PROMPT },
+          { type: "text", text: prompt },
           { type: "image_url", image_url: { url: "[jpeg base64 omitted]" } },
         ],
       },
@@ -226,7 +262,10 @@ async function runOpenRouterOcr(buffer, modelId, screenshotId = "") {
           {
             role: "user",
             content: [
-              { type: "text", text: OCR_PROMPT },
+              {
+                type: "text",
+                text: wantTitle ? OCR_PROMPT_WITH_TITLE : OCR_PROMPT,
+              },
               { type: "image_url", image_url: { url: dataUrl } },
             ],
           },
@@ -273,13 +312,7 @@ async function runOpenRouterOcr(buffer, modelId, screenshotId = "") {
       typeof json.choices?.[0]?.message?.content === "string"
         ? json.choices[0].message.content.trim()
         : "";
-    if (!raw || raw === "[empty]") {
-      return { text: "", status: "empty" };
-    }
-    return {
-      text: raw.slice(0, OCR_TEXT_MAX),
-      status: "done",
-    };
+    return parseOcrResponse(raw, wantTitle);
   } catch (err) {
     if (!(err.message || "").includes(":")) {
       await writeOcrLog({
@@ -298,20 +331,55 @@ async function runOpenRouterOcr(buffer, modelId, screenshotId = "") {
   }
 }
 
-async function runOcrForRecord(record, buffer, settings) {
-  if (!settings.enabled) return { text: "", status: "skipped" };
-  if (!(settings.apiKey || "").trim()) return { text: "", status: "no_key" };
-  if (!isOcrEligible(record, settings)) {
-    return { text: "", status: "not_eligible" };
+async function runOcrForRecord(record, buffer, settings, options = {}) {
+  const { force = false, wantTitle = false } = options;
+  if (!force) {
+    if (!settings.enabled) return { text: "", status: "skipped", title: "" };
+    if (!(settings.apiKey || "").trim())
+      return { text: "", status: "no_key", title: "" };
+    if (!isOcrEligible(record, settings)) {
+      return { text: "", status: "not_eligible", title: "" };
+    }
+  } else if (!(settings.apiKey || "").trim()) {
+    return { text: "", status: "no_key", title: "" };
   }
 
   try {
     const model = await fetchOcrModelFromServer();
-    return await runOpenRouterOcr(buffer, model, record.id);
+    return await runOpenRouterOcr(buffer, model, record.id, wantTitle);
   } catch (err) {
     console.error(`[ocr] failed ${record.id}:`, err.message);
-    return { text: "", status: "failed" };
+    return { text: "", status: "failed", title: "" };
   }
+}
+
+async function ocrRetryRecord(record) {
+  const imageName = record.image;
+  if (!imageName) return;
+
+  const settings = await fetchSnapzillaSettings();
+  const pendingBody = new FormData();
+  pendingBody.append("ocr_status", "pending");
+  await patchRecord(record.id, pendingBody);
+
+  const res = await pbFetch(filePath(record, imageName));
+  const buffer = Buffer.from(await res.arrayBuffer());
+  const wantTitle = !String(record.title || "").trim();
+  const ocrResult = await runOcrForRecord(record, buffer, settings, {
+    force: true,
+    wantTitle,
+  });
+
+  const body = new FormData();
+  appendOcrFields(body, ocrResult.text, ocrResult.status);
+  if (ocrResult.title && wantTitle) {
+    body.append("title", ocrResult.title);
+  }
+  await patchRecord(record.id, body);
+
+  console.log(
+    `[ocr-retry] ${record.id} ocr=${ocrResult.status}${ocrResult.title ? ` title="${ocrResult.title.slice(0, 40)}"` : ""}`,
+  );
 }
 
 function appendOcrFields(body, ocrText, ocrStatus) {
@@ -382,11 +450,17 @@ async function analyzeRecord(record) {
     let ocrStatus = initialOcrStatus;
 
     if (ocrWillRun) {
-      const ocrResult = await runOcrForRecord(record, buffer, settings);
+      const wantTitle = !String(record.title || "").trim();
+      const ocrResult = await runOcrForRecord(record, buffer, settings, {
+        wantTitle,
+      });
       ocrText = ocrResult.text;
       ocrStatus = ocrResult.status;
       const ocrBody = new FormData();
       appendOcrFields(ocrBody, ocrText, ocrStatus);
+      if (ocrResult.title && wantTitle) {
+        ocrBody.append("title", ocrResult.title);
+      }
       await patchRecord(record.id, ocrBody);
     }
 
@@ -430,6 +504,19 @@ async function pollOnce() {
   const json = await res.json();
   for (const item of json.items || []) {
     await analyzeRecord(item);
+  }
+
+  const retryFilter = encodeURIComponent('ocr_status = "retry"');
+  const retryRes = await pbFetch(
+    `/api/collections/screenshots/records?perPage=3&filter=${retryFilter}&sort=-updated`,
+  );
+  const retryJson = await retryRes.json();
+  for (const item of retryJson.items || []) {
+    try {
+      await ocrRetryRecord(item);
+    } catch (err) {
+      console.error(`[ocr-retry] failed ${item.id}:`, err.message);
+    }
   }
 }
 

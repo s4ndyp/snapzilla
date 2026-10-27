@@ -63,10 +63,10 @@ function describeOcr(item) {
         "Screenshot wordt geanalyseerd. Draait snapzilla-analyzer niet? docker compose ps / logs analyzer.",
     };
   }
-  if (st === "pending") {
+  if (st === "pending" || st === "retry") {
     return {
       status: "pending",
-      label: "OCR…",
+      label: st === "retry" ? "OCR opnieuw…" : "OCR…",
       detail: "Tekst wordt via OpenRouter uit de afbeelding gehaald.",
     };
   }
@@ -120,7 +120,17 @@ function describeOcr(item) {
 
 function itemWantsAnalysisPoll(item) {
   if (!isRecordAnalyzed(item)) return true;
-  return String(item.ocr_status || "").toLowerCase() === "pending";
+  const st = String(item.ocr_status || "").toLowerCase();
+  return st === "pending" || st === "retry";
+}
+
+function canRetryOcr(item) {
+  const st = String(item.ocr_status || "").toLowerCase();
+  return st === "failed" || st === "no_key";
+}
+
+async function requestOcrRetry(recordId) {
+  await patchRecord(recordId, { ocr_status: "retry", ocr_text: "" });
 }
 
 let analysisPollTimer = null;
@@ -2086,6 +2096,11 @@ function refreshLightbox() {
       <dt>Kleuren</dt><dd>${colorHtml || "—"}</dd>
       <dt>pHash</dt><dd>${escapeHtml(item.phash || "—")}</dd>
       <dt>OCR</dt><dd class="ocr-meta-dd">${renderLightboxOcrHtml(item)}</dd>
+      ${
+        canRetryOcr(item)
+          ? `<dt></dt><dd><button type="button" class="btn btn-ghost btn-sm" id="lbOcrRetry">OCR opnieuw proberen</button></dd>`
+          : ""
+      }
       <dt>Notities</dt>
       <dd><textarea id="notesEditor">${escapeHtml(item.notes || "")}</textarea></dd>
     </dl>
@@ -2107,6 +2122,19 @@ function refreshLightbox() {
     try {
       await patchRecord(item.id, { notes: e.target.value });
       item.notes = e.target.value;
+    } catch (err) {
+      showToast(err.message, true);
+    }
+  });
+
+  $("lbOcrRetry")?.addEventListener("click", async () => {
+    try {
+      await requestOcrRetry(item.id);
+      item.ocr_status = "retry";
+      item.ocr_text = "";
+      showToast("OCR opnieuw in de wachtrij — even geduld");
+      refreshLightbox();
+      scheduleAnalysisPoll();
     } catch (err) {
       showToast(err.message, true);
     }
