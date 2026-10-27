@@ -77,6 +77,14 @@ function describeOcr(item) {
         "Open **Model …** in de header en sla je OpenRouter API-key op (of zet OPENROUTER_API_KEY in .env).",
     };
   }
+  if (st === "not_eligible") {
+    return {
+      status: "skipped",
+      label: "Geen OCR",
+      detail:
+        "Screenshot van vóór OCR aan — alleen nieuwe uploads na inschakelen krijgen OCR.",
+    };
+  }
   if (st === "skipped") {
     return {
       status: "skipped",
@@ -111,12 +119,7 @@ function describeOcr(item) {
 
 function itemWantsAnalysisPoll(item) {
   if (!isRecordAnalyzed(item)) return true;
-  const st = String(item.ocr_status || "").toLowerCase();
-  if (st === "pending") return true;
-  if (item.ocr_text) return false;
-  if (st === "done" || st === "empty") return false;
-  if (snapzillaSettings && snapzillaSettings.ocr_enabled === false) return false;
-  return st === "skipped" || st === "failed" || st === "no_key" || st === "";
+  return String(item.ocr_status || "").toLowerCase() === "pending";
 }
 
 let analysisPollTimer = null;
@@ -728,6 +731,7 @@ async function loadSnapzillaSettings() {
           ocr_enabled: true,
           ocr_model: DEFAULT_OCR_MODEL,
           ocr_models: DEFAULT_OCR_MODELS,
+          ocr_enabled_since: new Date().toISOString(),
         }),
       },
     );
@@ -978,7 +982,7 @@ function renderOcrModelDialog() {
 function openOcrModelModal() {
   if (!snapzillaSettings) return;
   renderOcrModelDialog();
-  if (openRouterKeyConfigured()) {
+  if (!ocrModalFeedback.text && openRouterKeyConfigured()) {
     setOcrFeedback(
       "Tip: gebruik OCR-test om key + vision-model te controleren voordat je screenshots uploadt.",
       "info",
@@ -992,7 +996,11 @@ async function setOcrEnabled(enabled) {
     const loaded = await loadSnapzillaSettings();
     if (!loaded) throw new Error("Instellingen niet beschikbaar");
   }
-  await patchSnapzillaSettings({ ocr_enabled: enabled });
+  const payload = { ocr_enabled: enabled };
+  if (enabled) {
+    payload.ocr_enabled_since = new Date().toISOString();
+  }
+  await patchSnapzillaSettings(payload);
 }
 
 function updateOcrToggleButton() {
@@ -2187,7 +2195,7 @@ async function init() {
       await setOcrEnabled(next);
       showToast(
         next
-          ? "OCR aan — nieuwe shots en shots zonder tekst worden verwerkt"
+          ? "OCR aan — alleen screenshots vanaf nu krijgen OCR"
           : "OCR uit voor nieuwe screenshots",
       );
       scheduleAnalysisPoll();
