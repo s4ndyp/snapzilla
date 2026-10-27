@@ -42,6 +42,17 @@ static class DarkTheme
         btn.Font = new Font(btn.Font, FontStyle.Regular);
     }
 
+    /** Distinct capture actions in the screenshot hub. */
+    public static void StyleCaptureButton(Button btn, Color back, Color fore)
+    {
+        btn.FlatStyle = FlatStyle.Flat;
+        btn.FlatAppearance.BorderSize = 0;
+        btn.BackColor = back;
+        btn.ForeColor = fore;
+        btn.Cursor = Cursors.Hand;
+        btn.Font = new Font(btn.Font, FontStyle.Bold);
+    }
+
     public static void StyleToolActive(Button btn)
     {
         btn.FlatStyle = FlatStyle.Flat;
