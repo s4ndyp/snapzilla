@@ -88,7 +88,7 @@ OPENROUTER_API_KEY=sk-or-v1-...
 
 Daarna `bash scripts/update.sh` of `docker compose up -d --build analyzer`.
 
-In de galerij: badges **Bezig…** / **OCR…** / **Gelukt** / **Geen tekst** / **Mislukt** / **Geen API-key**. Afmetingen en pHash worden direct gezet (`analyzed=true`); tekst volgt via OpenRouter (enkele seconden). Met **OCR aan** worden ook oudere shots zonder tekst opgepikt (backfill).
+In de galerij: badges **Bezig…** / **OCR…** / **Gelukt** / **Geen tekst** / **Mislukt** / **Geen OCR** (oud shot). **OCR aan** geldt alleen voor uploads **na** dat moment — geen backfill. Request/response: **OCR-log** in de header.
 
 ```bash
 docker compose ps          # snapzilla-analyzer moet Up zijn

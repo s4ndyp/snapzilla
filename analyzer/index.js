@@ -20,12 +20,13 @@ const VISION_MAX_WIDTH = Number(process.env.VISION_MAX_WIDTH) || 1600;
 const OCR_TEXT_MAX = 50_000;
 const SETTINGS_CACHE_MS = 3000;
 
-/** @type {{ ts: number, enabled: boolean, model: string, apiKey: string }} */
+/** @type {{ ts: number, enabled: boolean, model: string, apiKey: string, ocrEnabledSince: string | null }} */
 let settingsCache = {
   ts: 0,
   enabled: true,
   model: OPENROUTER_MODEL_DEFAULT,
   apiKey: OPENROUTER_API_KEY_ENV,
+  ocrEnabledSince: null,
 };
 
 async function pbFetch(path, options = {}) {
@@ -39,6 +40,36 @@ async function pbFetch(path, options = {}) {
 
 function fileUrl(record, filename) {
   return `${PB}/api/files/screenshots/${record.id}/${filename}`;
+}
+
+async function writeOcrLog(entry) {
+  const body = new FormData();
+  for (const [k, v] of Object.entries(entry)) {
+    if (v === undefined || v === null) continue;
+    body.append(k, typeof v === "boolean" ? (v ? "true" : "false") : String(v));
+  }
+  try {
+    await pbFetch("/api/collections/ocr_logs/records", { method: "POST", body });
+  } catch (err) {
+    console.warn("[ocr-log] write failed:", err.message);
+  }
+}
+
+function recordCreatedAt(record) {
+  const raw = record.captured_at || record.created;
+  if (!raw) return null;
+  const d = new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function isOcrEligible(record, settings) {
+  if (!settings.enabled) return false;
+  if (!(settings.apiKey || "").trim()) return false;
+  const since = settings.ocrEnabledSince;
+  if (!since) return true;
+  const created = recordCreatedAt(record);
+  if (!created) return true;
+  return created.getTime() >= new Date(since).getTime();
 }
 
 /** Simple average-hash style fingerprint (8x8) for duplicate hints. */
@@ -68,7 +99,6 @@ async function extractColors(buffer) {
   return top;
 }
 
-/** Downscale for vision API (cost + latency). */
 async function prepareVisionImage(buffer) {
   let pipeline = sharp(buffer).rotate();
   const meta = await pipeline.metadata();
@@ -99,7 +129,16 @@ async function fetchSnapzillaSettings() {
         ? item.openrouter_api_key.trim()
         : "";
     const apiKey = fromDb || OPENROUTER_API_KEY_ENV;
-    settingsCache = { enabled, model, apiKey, ts: Date.now() };
+    const ocrEnabledSince = item?.ocr_enabled_since
+      ? String(item.ocr_enabled_since)
+      : null;
+    settingsCache = {
+      enabled,
+      model,
+      apiKey,
+      ocrEnabledSince,
+      ts: Date.now(),
+    };
     return settingsCache;
   } catch (err) {
     console.warn("[ocr] settings unreadable, defaults:", err.message);
@@ -107,6 +146,7 @@ async function fetchSnapzillaSettings() {
       enabled: true,
       model: OPENROUTER_MODEL_DEFAULT,
       apiKey: OPENROUTER_API_KEY_ENV,
+      ocrEnabledSince: null,
       ts: Date.now(),
     };
     return settingsCache;
@@ -115,10 +155,6 @@ async function fetchSnapzillaSettings() {
 
 async function resolveOpenRouterApiKey() {
   return (await fetchSnapzillaSettings()).apiKey;
-}
-
-async function fetchOcrEnabledFromServer() {
-  return (await fetchSnapzillaSettings()).enabled;
 }
 
 async function fetchOcrModelFromServer() {
@@ -131,18 +167,33 @@ Include UI labels, window titles, buttons, and body text.
 Do not add markdown, quotes, or commentary.
 If there is no readable text, reply with exactly: [empty]`;
 
-async function runOpenRouterOcr(buffer, modelId) {
+async function runOpenRouterOcr(buffer, modelId, screenshotId = "") {
   const apiKey = await resolveOpenRouterApiKey();
   if (!apiKey) {
     return { text: "", status: "no_key" };
   }
 
   const model = modelId || (await fetchOcrModelFromServer());
-
   const jpeg = await prepareVisionImage(buffer);
   const b64 = jpeg.toString("base64");
   const dataUrl = `data:image/jpeg;base64,${b64}`;
 
+  const requestPayload = {
+    model,
+    temperature: 0,
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: OCR_PROMPT },
+          { type: "image_url", image_url: { url: "[jpeg base64 omitted]" } },
+        ],
+      },
+    ],
+    _meta: { image_bytes: jpeg.length, screenshot_id: screenshotId },
+  };
+
+  const started = Date.now();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), OPENROUTER_TIMEOUT_MS);
   try {
@@ -169,11 +220,40 @@ async function runOpenRouterOcr(buffer, modelId) {
       }),
       signal: controller.signal,
     });
+    const rawText = await res.text();
+    const duration_ms = Date.now() - started;
+
     if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`${res.status}: ${text.slice(0, 400)}`);
+      await writeOcrLog({
+        screenshot_id: screenshotId,
+        phase: "openrouter",
+        model,
+        ok: false,
+        request_json: JSON.stringify(requestPayload),
+        response_json: rawText.slice(0, 8000),
+        error: `${res.status} ${rawText.slice(0, 500)}`,
+        duration_ms,
+      });
+      throw new Error(`${res.status}: ${rawText.slice(0, 400)}`);
     }
-    const json = await res.json();
+
+    const json = JSON.parse(rawText);
+    const safeResponse = {
+      id: json.id,
+      model: json.model,
+      usage: json.usage,
+      content: json.choices?.[0]?.message?.content?.slice?.(0, 5000),
+    };
+    await writeOcrLog({
+      screenshot_id: screenshotId,
+      phase: "openrouter",
+      model,
+      ok: true,
+      request_json: JSON.stringify(requestPayload),
+      response_json: JSON.stringify(safeResponse),
+      duration_ms,
+    });
+
     const raw =
       typeof json.choices?.[0]?.message?.content === "string"
         ? json.choices[0].message.content.trim()
@@ -185,19 +265,34 @@ async function runOpenRouterOcr(buffer, modelId) {
       text: raw.slice(0, OCR_TEXT_MAX),
       status: "done",
     };
+  } catch (err) {
+    if (!(err.message || "").includes(":")) {
+      await writeOcrLog({
+        screenshot_id: screenshotId,
+        phase: "openrouter",
+        model,
+        ok: false,
+        request_json: JSON.stringify(requestPayload),
+        error: err.message,
+        duration_ms: Date.now() - started,
+      });
+    }
+    throw err;
   } finally {
     clearTimeout(timer);
   }
 }
 
-async function runOcrForRecord(record, buffer) {
-  const enabled = await fetchOcrEnabledFromServer();
-  if (!enabled) return { text: "", status: "skipped" };
-  if (!(await resolveOpenRouterApiKey())) return { text: "", status: "no_key" };
+async function runOcrForRecord(record, buffer, settings) {
+  if (!settings.enabled) return { text: "", status: "skipped" };
+  if (!(settings.apiKey || "").trim()) return { text: "", status: "no_key" };
+  if (!isOcrEligible(record, settings)) {
+    return { text: "", status: "not_eligible" };
+  }
 
   try {
     const model = await fetchOcrModelFromServer();
-    return await runOpenRouterOcr(buffer, model);
+    return await runOpenRouterOcr(buffer, model, record.id);
   } catch (err) {
     console.error(`[ocr] failed ${record.id}:`, err.message);
     return { text: "", status: "failed" };
@@ -216,132 +311,122 @@ async function patchRecord(recordId, body) {
   });
 }
 
+async function markAnalyzeFailed(recordId, message) {
+  const body = new FormData();
+  body.append("analyzed", "true");
+  body.append("ocr_status", "failed");
+  try {
+    await patchRecord(recordId, body);
+  } catch (err) {
+    console.error(`[analyze] could not mark failed ${recordId}:`, err.message);
+  }
+  await writeOcrLog({
+    screenshot_id: recordId,
+    phase: "analyze",
+    ok: false,
+    error: message,
+  });
+}
+
 async function analyzeRecord(record) {
   const imageName = record.image;
   if (!imageName) return;
 
-  const res = await pbFetch(fileUrl(record, imageName));
-  const buffer = Buffer.from(await res.arrayBuffer());
+  const settings = await fetchSnapzillaSettings();
 
-  const meta = await sharp(buffer).metadata();
-  const phash = await computePhash(buffer);
-  const colors = await extractColors(buffer);
+  try {
+    const res = await pbFetch(fileUrl(record, imageName));
+    const buffer = Buffer.from(await res.arrayBuffer());
 
-  const ocrWillRun =
-    (await resolveOpenRouterApiKey()) && (await fetchOcrEnabledFromServer());
+    const meta = await sharp(buffer).metadata();
+    const phash = await computePhash(buffer);
+    const colors = await extractColors(buffer);
 
-  const body = new FormData();
-  body.append("width", String(meta.width || 0));
-  body.append("height", String(meta.height || 0));
-  body.append("file_size", String(buffer.length));
-  body.append("phash", phash);
-  body.append("colors", JSON.stringify(colors));
-  body.append("analyzed", "true");
-  if (ocrWillRun) {
-    body.append("ocr_status", "pending");
-  } else if (!(await resolveOpenRouterApiKey())) {
-    body.append("ocr_status", "no_key");
-  } else {
-    body.append("ocr_status", "skipped");
+    const ocrWillRun = isOcrEligible(record, settings);
+    let initialOcrStatus = "skipped";
+    if (ocrWillRun) initialOcrStatus = "pending";
+    else if (!(settings.apiKey || "").trim()) initialOcrStatus = "no_key";
+    else if (!settings.enabled) initialOcrStatus = "skipped";
+    else initialOcrStatus = "not_eligible";
+
+    const body = new FormData();
+    body.append("width", String(meta.width || 0));
+    body.append("height", String(meta.height || 0));
+    body.append("file_size", String(buffer.length));
+    body.append("phash", phash);
+    body.append("colors", JSON.stringify(colors));
+    body.append("analyzed", "true");
+    body.append("ocr_status", initialOcrStatus);
+    if (!record.captured_at) {
+      body.append("captured_at", new Date().toISOString());
+    }
+
+    await patchRecord(record.id, body);
+
+    let ocrText = "";
+    let ocrStatus = initialOcrStatus;
+
+    if (ocrWillRun) {
+      const ocrResult = await runOcrForRecord(record, buffer, settings);
+      ocrText = ocrResult.text;
+      ocrStatus = ocrResult.status;
+      const ocrBody = new FormData();
+      appendOcrFields(ocrBody, ocrText, ocrStatus);
+      await patchRecord(record.id, ocrBody);
+    }
+
+    await writeOcrLog({
+      screenshot_id: record.id,
+      phase: "analyze",
+      model: settings.model,
+      ok: true,
+      request_json: JSON.stringify({
+        eligible: ocrWillRun,
+        ocr_enabled_since: settings.ocrEnabledSince,
+        created: record.created,
+      }),
+      response_json: JSON.stringify({
+        ocr_status: ocrStatus,
+        ocr_chars: ocrText.length,
+        width: meta.width,
+        height: meta.height,
+      }),
+    });
+
+    const ocrHint = ocrText
+      ? ` ocr=${ocrText.length} chars (${ocrStatus})`
+      : ocrStatus
+        ? ` ocr=${ocrStatus}`
+        : "";
+    console.log(
+      `[analyze] ${record.id} ${meta.width}x${meta.height} phash=${phash}${ocrHint}`,
+    );
+  } catch (err) {
+    console.error(`[analyze] failed ${record.id}:`, err.message);
+    await markAnalyzeFailed(record.id, err.message);
   }
-  if (!record.captured_at) {
-    body.append("captured_at", new Date().toISOString());
-  }
-
-  await patchRecord(record.id, body);
-
-  let ocrText = "";
-  let ocrStatus = ocrWillRun
-    ? "pending"
-    : !(await resolveOpenRouterApiKey())
-      ? "no_key"
-      : "skipped";
-
-  if (ocrWillRun) {
-    const ocrResult = await runOcrForRecord(record, buffer);
-    ocrText = ocrResult.text;
-    ocrStatus = ocrResult.status;
-    const ocrBody = new FormData();
-    appendOcrFields(ocrBody, ocrText, ocrStatus);
-    await patchRecord(record.id, ocrBody);
-  }
-
-  const ocrHint = ocrText
-    ? ` ocr=${ocrText.length} chars (${ocrStatus})`
-    : ocrStatus
-      ? ` ocr=${ocrStatus}`
-      : "";
-  console.log(
-    `[analyze] ${record.id} ${meta.width}x${meta.height} phash=${phash}${ocrHint}`,
-  );
-}
-
-/** Re-run OCR on shots that were analyzed without text (OCR was off or failed). */
-async function ocrBackfillRecord(record) {
-  const imageName = record.image;
-  if (!imageName) return;
-
-  const pendingBody = new FormData();
-  pendingBody.append("ocr_status", "pending");
-  await patchRecord(record.id, pendingBody);
-
-  const res = await pbFetch(fileUrl(record, imageName));
-  const buffer = Buffer.from(await res.arrayBuffer());
-  const { text: ocrText, status: ocrStatus } = await runOcrForRecord(
-    record,
-    buffer,
-  );
-
-  const body = new FormData();
-  appendOcrFields(body, ocrText, ocrStatus);
-  await patchRecord(record.id, body);
-
-  const ocrHint = ocrText
-    ? ` ocr=${ocrText.length} chars (${ocrStatus})`
-    : ` ocr=${ocrStatus}`;
-  console.log(`[ocr-backfill] ${record.id}${ocrHint}`);
 }
 
 async function pollOnce() {
-  const pendingFilter = encodeURIComponent("analyzed != true");
+  const pendingFilter = encodeURIComponent(
+    '(analyzed = false || analyzed = null || analyzed != true)',
+  );
   const res = await pbFetch(
-    `/api/collections/screenshots/records?perPage=5&filter=${pendingFilter}&sort=-created`,
+    `/api/collections/screenshots/records?perPage=5&filter=${pendingFilter}&sort=created`,
   );
   const json = await res.json();
   for (const item of json.items || []) {
-    try {
-      await analyzeRecord(item);
-    } catch (err) {
-      console.error(`[analyze] failed ${item.id}:`, err.message);
-    }
-  }
-
-  if (!(await resolveOpenRouterApiKey()) || !(await fetchOcrEnabledFromServer()))
-    return;
-
-  const backfillFilter = encodeURIComponent(
-    'analyzed = true && ocr_text = "" && (ocr_status = "" || ocr_status = "skipped" || ocr_status = "failed" || ocr_status = "no_key")',
-  );
-  const back = await pbFetch(
-    `/api/collections/screenshots/records?perPage=2&filter=${backfillFilter}&sort=-created`,
-  );
-  const backJson = await back.json();
-  for (const item of backJson.items || []) {
-    try {
-      await ocrBackfillRecord(item);
-    } catch (err) {
-      console.error(`[ocr-backfill] failed ${item.id}:`, err.message);
-    }
+    await analyzeRecord(item);
   }
 }
 
 async function main() {
   console.log(`Snapzilla analyzer → ${PB} (poll ${POLL_MS}ms)`);
-  const { model, apiKey } = await fetchSnapzillaSettings();
+  const { model, apiKey, ocrEnabledSince } = await fetchSnapzillaSettings();
   if (apiKey) {
     const source = apiKey === OPENROUTER_API_KEY_ENV ? "env" : "database";
     console.log(
-      `[ocr] OpenRouter active=${model} key=${source} (default=${OPENROUTER_MODEL_DEFAULT})`,
+      `[ocr] OpenRouter active=${model} key=${source} since=${ocrEnabledSince || "(any)"}`,
     );
   } else {
     console.log(

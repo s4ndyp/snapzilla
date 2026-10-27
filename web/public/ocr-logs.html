@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Snapzilla — OCR-log</title>
+    <link rel="icon" href="/icons/favicon.ico" sizes="any" />
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="bg-glow" aria-hidden="true"></div>
+    <header class="header">
+      <div class="logo">
+        <img class="logo-mark" src="/icons/snapzilla-icon-64.png" width="40" height="40" alt="" />
+        <div>
+          <h1>OCR-log</h1>
+          <p class="subtitle">OpenRouter-verkeer (analyzer + tests)</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <label class="ocr-log-auto">
+          <input type="checkbox" id="autoRefresh" checked />
+          Auto-ververs (5s)
+        </label>
+        <button type="button" class="btn btn-ghost" id="refreshLogsBtn">Ververs</button>
+        <a class="btn btn-ghost" href="/">← Gallery</a>
+      </div>
+    </header>
+
+    <main class="ocr-log-page">
+      <p class="hint ocr-log-intro">
+        Hier zie je requests en responses richting OpenRouter. Draait
+        <code>snapzilla-analyzer</code> niet, blijven screenshots op
+        <strong>Bezig…</strong> staan en komt er geen log bij nieuwe uploads.
+        Controleer: <code>docker compose ps</code> en
+        <code>docker compose logs analyzer --tail=30</code>.
+      </p>
+      <div class="ocr-log-empty" id="logsEmpty" hidden>Geen logregels — nog geen OCR uitgevoerd.</div>
+      <div class="ocr-log-list" id="logsList"></div>
+    </main>
+
+    <script src="/ocr-logs.js" type="module"></script>
+  </body>
+</html>
