@@ -370,6 +370,27 @@
   .dropzone-text {
     font-size: 0.85rem;
   }
+
+  body.ocr-log-page {
+    padding-bottom: calc(1rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  body.ocr-log-page .ocr-log-columns {
+    grid-template-columns: 1fr;
+  }
+
+  body.ocr-log-page .ocr-log-stats {
+    position: static;
+  }
+
+  body.ocr-log-page .header-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  body.ocr-log-page .header-actions > * {
+    display: inline-flex !important;
+  }
 }
 
 @media (min-width: 769px) {
