@@ -105,6 +105,27 @@ sealed class CapturePreviewForm : Form
         undoBtn.Click += (_, _) => _editor.Undo();
         tools.Controls.Add(undoBtn);
 
+        var resetBtn = new Button
+        {
+            Text = "Herstel",
+            AutoSize = true,
+            Margin = new Padding(0, 0, 4, 0),
+            TabStop = false,
+        };
+        DarkTheme.StyleSecondary(resetBtn);
+        resetBtn.Click += (_, _) => _editor.ResetToOriginal();
+        tools.Controls.Add(resetBtn);
+
+        void SyncEditButtons()
+        {
+            var can = _editor.CanUndo;
+            undoBtn.Enabled = can;
+            resetBtn.Enabled = can;
+        }
+
+        _editor.EditsChanged += (_, _) => SyncEditButtons();
+        SyncEditButtons();
+
         SelectTool(EditTool.Pen);
 
         var bottom = new Panel { Dock = DockStyle.Bottom, Height = 96, Padding = new Padding(8) };

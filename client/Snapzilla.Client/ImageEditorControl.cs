@@ -22,7 +22,12 @@ sealed class ImageEditorControl : UserControl
     const int MaxEditPixels = 16_000_000;
 
     Bitmap? _bitmap;
+    byte[]? _originalPng;
     readonly List<Bitmap> _undo = new();
+
+    public event EventHandler? EditsChanged;
+
+    public bool CanUndo => _undo.Count > 0;
     EditTool _tool = EditTool.Pen;
     StampKind _stampKind = StampKind.Check;
     Color _strokeColor = Color.FromArgb(255, 107, 159, 255);
@@ -72,13 +77,24 @@ sealed class ImageEditorControl : UserControl
 
     public void LoadPng(byte[] png)
     {
+        _originalPng = png;
         ClearUndo();
         _bitmap?.Dispose();
 
         using var ms = new MemoryStream(png);
         using var loaded = new Bitmap(ms);
         _bitmap = NormalizeForEditing(loaded);
+        _chainAnchor = null;
+        _chainHoverClient = null;
         Invalidate();
+        NotifyEditsChanged();
+    }
+
+    public void ResetToOriginal()
+    {
+        if (_originalPng is null || _originalPng.Length == 0)
+            return;
+        LoadPng(_originalPng);
     }
 
     static Bitmap NormalizeForEditing(Bitmap source)
@@ -124,6 +140,7 @@ sealed class ImageEditorControl : UserControl
         _chainAnchor = null;
         _chainHoverClient = null;
         Invalidate();
+        NotifyEditsChanged();
     }
 
     void PushUndo()
@@ -136,6 +153,8 @@ sealed class ImageEditorControl : UserControl
             _undo[0].Dispose();
             _undo.RemoveAt(0);
         }
+
+        NotifyEditsChanged();
     }
 
     void ClearUndo()
@@ -143,7 +162,10 @@ sealed class ImageEditorControl : UserControl
         foreach (var b in _undo)
             b.Dispose();
         _undo.Clear();
+        NotifyEditsChanged();
     }
+
+    void NotifyEditsChanged() => EditsChanged?.Invoke(this, EventArgs.Empty);
 
     protected override void OnPaint(PaintEventArgs e)
     {
