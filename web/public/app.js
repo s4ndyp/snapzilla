@@ -32,7 +32,7 @@ const state = {
   editSnapshot: null,
   editUndoStack: [],
   editChainAnchor: null,
-  ocrPanelOpen: false,
+  ocrPanelOpen: true,
 };
 
 const MAX_EDIT_UNDO = 8;
@@ -215,7 +215,7 @@ function renderLightboxOcrPanel(item) {
   $("lightboxOcrText").innerHTML = renderOcrMarkdown(text);
   $("lightboxOcrCount").textContent = `Markdown · ${text.length} tekens`;
   panel.hidden = !state.ocrPanelOpen;
-  btn.textContent = state.ocrPanelOpen ? "OCR-resultaat verbergen" : "OCR-resultaat";
+  btn.textContent = state.ocrPanelOpen ? "OCR-resultaat verbergen" : "OCR-resultaat tonen";
   btn.setAttribute("aria-expanded", state.ocrPanelOpen ? "true" : "false");
   if (state.ocrPanelOpen) requestAnimationFrame(sizeLightboxImageBelow);
 }
@@ -2080,14 +2080,21 @@ function renderLightboxShotActions(item) {
 function openLightbox(id) {
   const idx = state.items.findIndex((x) => x.id === id);
   if (idx < 0) return;
+  lightboxOcrDefaultItemId = null;
   state.lightboxIndex = idx;
   refreshLightbox();
   $("lightbox").showModal();
 }
 
+let lightboxOcrDefaultItemId = null;
+
 function refreshLightbox() {
   const item = state.items[state.lightboxIndex];
   if (!item) return;
+  if (item.id !== lightboxOcrDefaultItemId) {
+    lightboxOcrDefaultItemId = item.id;
+    state.ocrPanelOpen = true;
+  }
   $("lightboxImg").src = `${fileUrl(item)}?t=${Date.now()}`;
   $("lightboxImg").hidden = false;
   $("lightboxCaption").textContent = galleryTitleLabel(item) || "Screenshot";
