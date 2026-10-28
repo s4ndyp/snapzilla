@@ -94,19 +94,28 @@
     top: 0;
     left: 0;
     bottom: 0;
-    z-index: 300;
-    width: min(88vw, 320px);
+    z-index: 320;
+    width: min(92vw, 340px);
     max-width: 100%;
     transform: translateX(-105%);
     transition: transform 0.28s ease;
-    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.45);
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.55);
     border-right: 1px solid var(--border);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+    background: var(--bg-elevated);
+    padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+    isolation: isolate;
   }
 
   body.mobile-drawer-open .sidebar {
     transform: translateX(0);
+  }
+
+  body.mobile-drawer-open .main,
+  body.mobile-drawer-open .aside-right {
+    pointer-events: none;
   }
 
   .main {
@@ -185,8 +194,8 @@
     display: block;
     position: fixed;
     inset: 0;
-    z-index: 280;
-    background: rgba(0, 0, 0, 0.55);
+    z-index: 300;
+    background: rgba(0, 0, 0, 0.72);
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.25s ease;
@@ -315,16 +324,12 @@
   .lightbox-figure {
     flex: 1;
     min-height: 0;
-    padding: 3.25rem 0.5rem 0.75rem;
+    padding: 3.25rem 0.5rem max(0.75rem, env(safe-area-inset-bottom, 0px));
   }
 
+  /* Datum, afmeting, client, kleuren, notities — alleen desktop */
   .lightbox-meta {
-    flex-shrink: 0;
-    max-height: 42vh;
-    border-left: none;
-    border-top: 1px solid var(--border);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
+    display: none !important;
   }
 
   .lightbox-close {
