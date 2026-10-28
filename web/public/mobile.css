@@ -87,6 +87,8 @@
     grid-template-columns: 1fr;
     min-height: auto;
     padding-bottom: calc(4.25rem + env(safe-area-inset-bottom, 0px));
+    /* Geen eigen stacking context — anders ligt de backdrop (z-300) over de drawer */
+    z-index: auto;
   }
 
   .sidebar {
@@ -94,19 +96,19 @@
     top: 0;
     left: 0;
     bottom: 0;
-    z-index: 320;
+    z-index: 330;
     width: min(92vw, 340px);
     max-width: 100%;
     transform: translateX(-105%);
     transition: transform 0.28s ease;
-    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.55);
+    box-shadow: 8px 0 24px rgba(0, 0, 0, 0.35);
     border-right: 1px solid var(--border);
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
-    background: var(--bg-elevated);
+    /* Desktop .sidebar is rgba(0.5) — op mobiel volledig dekkend, geen dimming erover */
+    background: var(--bg-elevated) !important;
     padding-top: max(0.75rem, env(safe-area-inset-top, 0px));
     padding-bottom: env(safe-area-inset-bottom, 0px);
-    isolation: isolate;
   }
 
   body.mobile-drawer-open .sidebar {
@@ -194,15 +196,22 @@
     display: block;
     position: fixed;
     inset: 0;
-    z-index: 300;
-    background: rgba(0, 0, 0, 0.72);
+    z-index: 310;
+    background: rgba(0, 0, 0, 0.55);
     opacity: 0;
     pointer-events: none;
-    transition: opacity 0.25s ease;
+    transition: opacity 0.25s ease, left 0.28s ease;
   }
 
-  body.mobile-drawer-open .mobile-backdrop,
+  /* Dimming alleen over galerij — niet over de filter-drawer */
+  body.mobile-drawer-open .mobile-backdrop {
+    left: min(92vw, 340px);
+    opacity: 1;
+    pointer-events: auto;
+  }
+
   body.mobile-tab-more .mobile-backdrop {
+    left: 0;
     opacity: 1;
     pointer-events: auto;
   }
