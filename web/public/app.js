@@ -14,6 +14,7 @@ const state = {
   view: "all",
   tag: null,
   albumId: null,
+  onlyNoAlbum: false,
   search: "",
   dayFilter: null,
   monthFilter: null,
@@ -373,6 +374,10 @@ function buildFilter(opts = {}) {
   }
   if (state.albumId) {
     parts.push(`album = "${state.albumId}"`);
+  }
+  if (state.onlyNoAlbum) {
+    // Lege single-relation is "" (zelfde waarde waarmee "Album wissen" leegt)
+    parts.push('album = ""');
   }
   if (!opts.skipDateFilter) {
     if (state.dayFilter) {
@@ -1345,7 +1350,7 @@ function renderShotTagBadges(item) {
 }
 
 function renderShotAlbumBadge(item) {
-  if (state.albumId) return "";
+  if (state.albumId || state.onlyNoAlbum) return "";
   const name = albumNameOf(item);
   if (!name) return "";
   return `<span class="shot-album-badge"><span class="shot-album-icon" aria-hidden="true">📁</span>${escapeHtml(name)}</span>`;
@@ -1377,16 +1382,34 @@ function renderSidebarLists() {
   const allBtn = document.createElement("li");
   const all = document.createElement("button");
   all.type = "button";
-  const allAlbumsActive = !state.albumId;
+  const allAlbumsActive = !state.albumId && !state.onlyNoAlbum;
   all.className = `filter-btn${allAlbumsActive ? " filter-btn-active" : ""}`;
   if (allAlbumsActive) all.setAttribute("aria-current", "true");
   all.textContent = "Alle albums";
   all.addEventListener("click", () => {
     state.albumId = null;
+    state.onlyNoAlbum = false;
     reload();
   });
   allBtn.appendChild(all);
   albumList.appendChild(allBtn);
+
+  // Filtrer op screenshots die nog in geen album staan
+  const noAlbumBtnLi = document.createElement("li");
+  const noAlbum = document.createElement("button");
+  noAlbum.type = "button";
+  const noAlbumActive = state.onlyNoAlbum;
+  noAlbum.className = `filter-btn${noAlbumActive ? " filter-btn-active" : ""}`;
+  if (noAlbumActive) noAlbum.setAttribute("aria-current", "true");
+  noAlbum.textContent = "Nog geen album";
+  noAlbum.addEventListener("click", () => {
+    state.onlyNoAlbum = !state.onlyNoAlbum;
+    if (state.onlyNoAlbum) state.albumId = null;
+    reload();
+  });
+  noAlbumBtnLi.appendChild(noAlbum);
+  albumList.appendChild(noAlbumBtnLi);
+
   for (const alb of state.albums) {
     const li = document.createElement("li");
     li.className = "album-list-item";
@@ -1398,6 +1421,7 @@ function renderSidebarLists() {
     btn.textContent = alb.name;
     btn.addEventListener("click", () => {
       state.albumId = state.albumId === alb.id ? null : alb.id;
+      state.onlyNoAlbum = false;
       reload();
     });
     const del = document.createElement("button");
@@ -1431,7 +1455,9 @@ function renderGallery() {
   gallery.innerHTML = "";
   const emptyEl = $("galleryEmpty");
   emptyEl.hidden = display.length > 0;
-  if (!display.length && state.dayFilter) {
+  if (!display.length && state.onlyNoAlbum) {
+    emptyEl.textContent = "Al je screenshots zitten in een album. Top!";
+  } else if (!display.length && state.dayFilter) {
     emptyEl.textContent = `Geen screenshots op ${formatDayLong(state.dayFilter)}. Klik op “filter wissen” in de kalender.`;
   } else if (!display.length && state.monthFilter) {
     emptyEl.textContent = `Geen screenshots in ${formatMonthLong(state.monthFilter)}. Wis het filter in de kalender.`;
