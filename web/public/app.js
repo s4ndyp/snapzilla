@@ -1,5 +1,6 @@
 import { renderOcrMarkdown } from "./ocr-markdown.js";
 import { initMobileUi } from "./mobile.js";
+import { exportAll, importAll } from "./transfer.js";
 
 const API = "/api";
 const COLLECTION = "screenshots";
@@ -2273,6 +2274,90 @@ async function reload(append = false, options = {}) {
   }
 }
 
+// ---------- Export / import (transfer.js) ----------
+function initTransferUi() {
+  const exportBtn = $("exportBtn");
+  const importBtn = $("importBtn");
+  const fileInput = $("importFileInput");
+  const statusEl = $("transferStatus");
+  if (!exportBtn || !importBtn || !fileInput || !statusEl) return;
+
+  const setBusy = (on) => {
+    exportBtn.disabled = on;
+    importBtn.disabled = on;
+  };
+  const status = (t) => {
+    statusEl.hidden = !t;
+    statusEl.textContent = t || "";
+  };
+  const short = (s) => String(s || "").slice(0, 28);
+  const mb = (bytes) => `${Math.round((bytes / 1048576) * 10) / 10} MB`;
+
+  exportBtn.addEventListener("click", async () => {
+    setBusy(true);
+    status("Exporteren…");
+    try {
+      const { zip, manifest } = await exportAll({
+        api: API,
+        JSZip: globalThis.JSZip,
+        onProgress: (done, total, label) => status(`Exporteren… ${done}/${total} ${short(label)}`),
+      });
+      status("Zip samenstellen…");
+      const blob = await zip.generateAsync({ type: "blob" });
+      const stamp = new Date().toISOString().slice(0, 16).replace(/[:T]/g, "-");
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = `snapzilla-export-${stamp}.zip`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+      const counts = Object.entries(manifest.counts)
+        .map(([k, v]) => `${v} ${k}`)
+        .join(", ");
+      status(`Export klaar (${mb(blob.size)}): ${counts}`);
+      showToast("Export voltooid — bekijk je downloads");
+    } catch (err) {
+      status("");
+      showToast(`Export mislukt: ${err.message}`, true);
+    } finally {
+      setBusy(false);
+    }
+  });
+
+  importBtn.addEventListener("click", () => fileInput.click());
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files[0];
+    fileInput.value = "";
+    if (!file) return;
+    setBusy(true);
+    status(`Importeren uit ${short(file.name)}…`);
+    try {
+      const res = await importAll({
+        api: API,
+        JSZip: globalThis.JSZip,
+        zipData: await file.arrayBuffer(),
+        onProgress: (done, total, label) => status(`Importeren… ${done}/${total} ${short(label)}`),
+      });
+      const alb = await listAlbums();
+      state.albums = alb.items || [];
+      populateBulkAlbumSelect();
+      await reload();
+      const detail = `${res.created} nieuw, ${res.skipped} bestaand overgeslagen`;
+      status(`Import klaar: ${detail}${res.failed.length ? ` — ${res.failed.length} mislukt` : ""}`);
+      if (res.failed.length) {
+        console.warn("Import-fouten:", res.failed);
+        showToast(`Import deels mislukt (${res.failed.length} records) — details in de statusregel`, true);
+      } else {
+        showToast("Import voltooid");
+      }
+    } catch (err) {
+      status("");
+      showToast(`Import mislukt: ${err.message}`, true);
+    } finally {
+      setBusy(false);
+    }
+  });
+}
+
 async function init() {
   state.calendarMonth = currentYearMonth();
   try {
@@ -2590,6 +2675,7 @@ async function init() {
     if (e.key === "Escape") $("lightbox").close();
   });
 
+  initTransferUi();
   initMobileUi();
 
   await reload();

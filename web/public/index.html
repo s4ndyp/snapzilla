@@ -195,6 +195,15 @@
           </div>
           <div class="calendar-grid" id="calendarGrid" role="grid" aria-label="Kalender"></div>
         </section>
+
+        <section class="card transfer-card" aria-labelledby="transfer-heading">
+          <h2 id="transfer-heading">Beheer</h2>
+          <button type="button" class="btn btn-ghost" id="exportBtn">Exporteren (zip)</button>
+          <button type="button" class="btn btn-ghost" id="importBtn">Importeren (zip)</button>
+          <input type="file" id="importFileInput" accept=".zip,application/zip" hidden />
+          <p class="hint" id="transferStatus" role="status" hidden></p>
+          <p class="hint">Compleet: albums, tags, shots met bestanden, instellingen en OCR-historie. Import op een andere host behoudt ids; bestaande shots worden overgeslagen.</p>
+        </section>
       </aside>
     </div>
 
@@ -452,6 +461,7 @@
 
     <script src="/vendor/purify.min.js"></script>
     <script src="/vendor/marked.min.js"></script>
+    <script src="/vendor/jszip.min.js"></script>
     <script src="/app.js" type="module"></script>
   </body>
 </html>
